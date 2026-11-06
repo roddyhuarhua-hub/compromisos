@@ -213,7 +213,11 @@ def transcribir_audio(nombre_archivo: str, contenido: bytes, tipo_mime: str = "a
             ruta = f.name
         try:
             segmentos, _ = _whisper_local().transcribe(ruta, language="es", vad_filter=True)
-            return " ".join(s.text.strip() for s in segmentos)
+            texto = " ".join(s.text.strip() for s in segmentos)
+            if texto.strip():
+                return texto
+        except Exception:
+            pass  # si Whisper local falla, Gemini transcribe el audio
         finally:
             os.unlink(ruta)
 

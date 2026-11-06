@@ -95,3 +95,16 @@ def test_gemini_salta_modelo_saturado(monkeypatch):
     assert ia._generar_gemini(contents=["hola"]).text == "ok"
     assert llamados == ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-2.5-flash"]  # reintenta 1 vez
     assert ia.modelo_gemini() == "gemini-2.5-flash"
+
+
+def test_transcribir_respaldo_gemini_si_whisper_falla(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "x")
+    monkeypatch.setattr(ia, "_hay_whisper_local", lambda: True)
+
+    def roto():
+        raise TypeError("open() got an unexpected keyword argument 'metadata_errors'")
+
+    monkeypatch.setattr(ia, "_whisper_local", roto)
+    monkeypatch.setattr(ia, "_generar_gemini", lambda **kw: SimpleNamespace(text="hola desde gemini"))
+    assert ia.transcribir_audio("a.wav", b"RIFF....", "audio/wav") == "hola desde gemini"
