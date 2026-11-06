@@ -1,6 +1,6 @@
 # 🤝 Compromisos
 
-**Demo:** _pendiente de despliegue en Streamlit Community Cloud_ · **Video de respaldo:** _pendiente_
+**Demo:** https://compromisos-roddy.streamlit.app · **Video de respaldo:** _pendiente_
 
 > Proyecto final de la Diplomatura Q-Lab PUCP · Data Science con Python ([issue #204](https://github.com/d2cml-ai/Data-Science-Python/issues/204)).
 
@@ -49,7 +49,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 
 ## 6. Demo
 
-- **URL pública:** _pendiente_
+- **URL pública:** https://compromisos-roddy.streamlit.app (Streamlit Community Cloud, con Gemini + Whisper local)
 - **Correr en local:**
 
   ```bash
