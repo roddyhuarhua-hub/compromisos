@@ -330,10 +330,12 @@ with tab_tablero:
         c1, c2 = st.columns([1.75, 1])
         with c1:
             st.markdown("#### 🗺️ Mapa de calor de reuniones y semáforo por comunidad")
-            st.plotly_chart(visual.mapa(ind, reuniones), width="stretch",
+            fondo = st.segmented_control("Fondo del mapa", list(visual.FONDOS), default="🛰️ Satélite",
+                                         label_visibility="collapsed") or "🛰️ Satélite"
+            st.plotly_chart(visual.mapa(ind, reuniones, fondo=fondo), width="stretch",
                             config={"scrollZoom": True, "displayModeBar": False})
-            st.caption("Azul: intensidad de reuniones. Círculos: comunidades, coloreadas por índice de riesgo; "
-                       "el tamaño crece con los compromisos vencidos.")
+            st.caption("Halo: intensidad de reuniones. Círculos: comunidades, coloreadas por índice de riesgo; "
+                       "el tamaño crece con los compromisos vencidos. Usa la rueda del mouse para acercar.")
         with c2:
             st.markdown("#### 🚦 Semáforo social")
             filas = []

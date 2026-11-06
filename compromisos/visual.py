@@ -70,14 +70,32 @@ def indice_comunidades(df: pd.DataFrame, comunidades: pd.DataFrame) -> pd.DataFr
 
 
 # ------------------------------------------------------------------ mapa
-def mapa(ind: pd.DataFrame, reuniones: pd.DataFrame, alto: int = 470) -> go.Figure:
-    """Mapa de calor de reuniones + burbujas por comunidad coloreadas por semaforo."""
+ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services"
+FONDOS = {
+    # nombre: (capas raster de abajo hacia arriba, atribucion, texto oscuro?)
+    "🛰️ Satélite": ([f"{ESRI}/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}",
+                    f"{ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{{z}}/{{y}}/{{x}}"],
+                   "Imágenes © Esri, Maxar, Earthstar Geographics", False),
+    "⛰️ Relieve": ([f"{ESRI}/World_Topo_Map/MapServer/tile/{{z}}/{{y}}/{{x}}"],
+                  "Mapa topográfico © Esri, HERE, Garmin, USGS", True),
+    "🗺️ Calles": ([], "© CARTO, © OpenStreetMap", True),
+}
+
+
+def mapa(ind: pd.DataFrame, reuniones: pd.DataFrame, alto: int = 470,
+         fondo: str = "🛰️ Satélite") -> go.Figure:
+    """Mapa de calor de reuniones + burbujas por comunidad coloreadas por semaforo,
+    sobre imagen satelital, relieve o calles."""
+    capas, atribucion, texto_oscuro = FONDOS.get(fondo, FONDOS["🛰️ Satélite"])
+    satelite = not texto_oscuro
     fig = go.Figure()
     r = reuniones.dropna(subset=["lat", "lon"])
     if not r.empty:
         fig.add_trace(go.Densitymap(
             lat=r["lat"], lon=r["lon"], z=r["compromisos"], radius=45, opacity=0.7,
-            colorscale=[[0, "rgba(42,120,214,0)"], [0.3, "#86b6ef"], [0.6, "#2a78d6"], [1, "#0d366b"]],
+            colorscale=([[0, "rgba(134,182,239,0)"], [0.3, "#86b6ef"], [0.6, "#cde2fb"], [1, "#ffffff"]]
+                        if satelite else
+                        [[0, "rgba(42,120,214,0)"], [0.3, "#86b6ef"], [0.6, "#2a78d6"], [1, "#0d366b"]]),
             showscale=False, hoverinfo="skip", name="Intensidad de reuniones",
         ))
     c = ind.dropna(subset=["lat", "lon"])
@@ -87,9 +105,10 @@ def mapa(ind: pd.DataFrame, reuniones: pd.DataFrame, alto: int = 470) -> go.Figu
             continue
         fig.add_trace(go.Scattermap(
             lat=s["lat"], lon=s["lon"], mode="markers+text",
-            marker=dict(size=14 + s["vencidos"].clip(upper=15) * 2.2, color=SEMAFORO[nivel], opacity=0.92),
+            marker=dict(size=14 + s["vencidos"].clip(upper=15) * 2.2, color=SEMAFORO[nivel], opacity=0.95),
             text=s["comunidad"].str.replace("C.C. ", "", regex=False), textposition="top center",
-            textfont=dict(size=12, color=TINTA),
+            textfont=dict(size=13, color=TINTA if texto_oscuro else "#ffffff",
+                          weight=700 if satelite else 500),
             name=f"{nivel}",
             customdata=s[["comunidad", "indice", "vencidos", "por_vencer", "reuniones", "familias"]].values,
             hovertemplate=("<b>%{customdata[0]}</b><br>Índice de riesgo: %{customdata[1]:.0f}/100"
@@ -98,7 +117,12 @@ def mapa(ind: pd.DataFrame, reuniones: pd.DataFrame, alto: int = 470) -> go.Figu
         ))
     centro = dict(lat=float(c["lat"].mean()), lon=float(c["lon"].mean())) if not c.empty else dict(lat=-14.15, lon=-72.8)
     fig.update_layout(
-        map=dict(style=os.getenv("ESTILO_MAPA", "carto-positron"), center=centro, zoom=8.6),
+        map=dict(
+            style=os.getenv("ESTILO_MAPA") or ("carto-positron" if not capas else "white-bg"),
+            center=centro, zoom=8.6,
+            layers=[dict(sourcetype="raster", source=[url], below="traces",
+                         sourceattribution=atribucion) for url in capas],
+        ),
         height=alto, margin=dict(l=0, r=0, t=0, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=0.01, x=0.01, bgcolor="rgba(255,255,255,0.85)",
                     title=dict(text="Semáforo  ")),
