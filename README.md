@@ -92,7 +92,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
   | Extracción | `llama-3.3-70b-versatile` | Buen español, modo JSON, barato y rápido |
   | Actas en foto | `llama-4-scout-17b-16e-instruct` | Lee manuscritos sin instalar OCR pesado en el servidor |
 
-  **Alternativa con Gemini** (si no hay clave de Groq): el audio se transcribe con **Whisper local** (`faster-whisper`, modelo `base`, en el propio servidor) y la extracción y la lectura de actas usan el Gemini Flash estable más reciente que ofrezca la cuenta (se detecta solo; hoy `gemini-2.5-flash` o superior) con salida JSON. La app usa la primera clave que encuentre. Los modelos se cambian con variables de entorno (`.env.example`).
+  **Alternativa con Gemini** (si no hay clave de Groq): el audio se transcribe con **Whisper local** (`faster-whisper`, modelo `base`, en el propio servidor) y la extracción y la lectura de actas usan el Gemini **Flash-Lite** más reciente de la cuenta (se detecta solo; en la prueba real `gemini-3.5-flash-lite`: 8 compromisos, US$ 0.004 por reunión), con salida JSON. Si un modelo está saturado o no responde en 25 s, la app pasa sola al siguiente. La app usa la primera clave que encuentre. Los modelos se cambian con variables de entorno (`.env.example`).
 
 ## 7. Modelo de negocio
 

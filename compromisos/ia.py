@@ -79,19 +79,19 @@ def _gemini():
     if ("gemini", clave) not in _CLIENTES:
         from google.genai import types
 
-        # 45 s por intento: si un modelo no responde, se pasa al siguiente sin colgar la app
+        # 25 s por intento: si un modelo no responde, se pasa al siguiente sin colgar la app
         _CLIENTES[("gemini", clave)] = genai.Client(
-            api_key=clave, http_options=types.HttpOptions(timeout=45_000))
+            api_key=clave, http_options=types.HttpOptions(timeout=25_000))
     return _CLIENTES[("gemini", clave)]
 
 
-RESERVA_GEMINI = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
+RESERVA_GEMINI = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
 
 
 def ordenar_modelos_gemini(nombres: list[str]) -> list[str]:
-    """Ordena los Gemini Flash de la cuenta para combinar calidad y disponibilidad:
-    el Flash estable mas nuevo, luego el Flash-Lite mas nuevo (mas rapido y con menos
-    saturacion), y despues el resto. Los 'preview' van al final."""
+    """Ordena los Gemini Flash de la cuenta priorizando velocidad y disponibilidad:
+    el Flash-Lite estable mas nuevo, luego el Flash mas nuevo, y despues el resto.
+    Los 'preview' van al final."""
     excluir = ("image", "tts", "audio", "live", "embedding", "thinking", "exp", "8b")
     flash, lite = [], []
     for n in nombres:
@@ -103,7 +103,9 @@ def ordenar_modelos_gemini(nombres: list[str]) -> list[str]:
         (lite if m.group(2) else flash).append(clave)
     flash = [c[2] for c in sorted(flash, reverse=True)]
     lite = [c[2] for c in sorted(lite, reverse=True)]
-    return flash[:1] + lite[:1] + flash[1:] + lite[1:]
+    # Flash-Lite primero: responde en pocos segundos y casi no se satura; para extraer
+    # compromisos rinde igual de bien (probado en la app). Flash queda de respaldo.
+    return lite[:1] + flash[:1] + lite[1:] + flash[1:]
 
 
 def elegir_modelo_gemini(nombres: list[str]) -> str | None:
@@ -158,8 +160,8 @@ def _generar_gemini(max_modelos: int = 6, **kwargs):
                 if not any(x in str(e) for x in ERRORES_REINTENTABLES):
                     raise
                 ultimo_error = e
-                if "404" in str(e) or "NOT_FOUND" in str(e):
-                    break  # no existe: no vale la pena reintentar
+                if any(x in str(e) for x in ("404", "NOT_FOUND", "timed out", "Timeout", "DEADLINE")):
+                    break  # no existe o no responde: pasar directo al siguiente
                 if intento == 0:
                     time.sleep(1.5)
     raise RuntimeError(f"Ningun modelo Gemini respondio. Ultimo error: {ultimo_error}")
