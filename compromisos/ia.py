@@ -56,16 +56,28 @@ def descripcion_proveedor() -> str:
     return "sin IA"
 
 
+_CLIENTES: dict = {}
+
+
 def _groq():
     from groq import Groq  # import diferido: la app abre aunque no este instalado
 
-    return Groq(api_key=os.environ["GROQ_API_KEY"])
+    clave = os.environ["GROQ_API_KEY"]
+    if ("groq", clave) not in _CLIENTES:
+        _CLIENTES[("groq", clave)] = Groq(api_key=clave)
+    return _CLIENTES[("groq", clave)]
 
 
 def _gemini():
+    """Cliente Gemini reutilizable. Se guarda una referencia: si el cliente se crea en
+    la misma linea de la llamada, Python lo destruye y cierra la conexion a medio uso
+    ("Cannot send a request, as the client has been closed")."""
     from google import genai
 
-    return genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
+    clave = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    if ("gemini", clave) not in _CLIENTES:
+        _CLIENTES[("gemini", clave)] = genai.Client(api_key=clave)
+    return _CLIENTES[("gemini", clave)]
 
 
 def _exigir_proveedor() -> str:
