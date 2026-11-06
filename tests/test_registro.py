@@ -74,6 +74,7 @@ def test_elegir_modelo_gemini():
     nombres = ["models/gemini-2.0-flash", "models/gemini-2.5-flash", "models/gemini-2.5-flash-lite",
                "models/gemini-3-flash-preview", "models/gemini-2.5-pro", "models/gemini-2.5-flash-image"]
     assert ia.elegir_modelo_gemini(nombres) == "gemini-2.5-flash"
+    assert ia.ordenar_modelos_gemini(nombres)[:3] == ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]
     assert ia.elegir_modelo_gemini(["models/gemini-3-flash-preview"]) == "gemini-3-flash-preview"
     assert ia.elegir_modelo_gemini(["models/gemini-2.5-pro"]) is None
 
@@ -92,5 +93,5 @@ def test_gemini_salta_modelo_saturado(monkeypatch):
     monkeypatch.setitem(ia._CLIENTES, "modelos_gemini", ["gemini-3.8-flash", "gemini-2.5-flash"])
     monkeypatch.delitem(ia._CLIENTES, "modelo_ok", raising=False)
     assert ia._generar_gemini(contents=["hola"]).text == "ok"
-    assert llamados == ["gemini-3.8-flash", "gemini-2.5-flash"]
+    assert llamados == ["gemini-3.8-flash", "gemini-3.8-flash", "gemini-2.5-flash"]  # reintenta 1 vez
     assert ia.modelo_gemini() == "gemini-2.5-flash"

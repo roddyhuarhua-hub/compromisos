@@ -77,25 +77,33 @@ def _gemini():
 
     clave = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if ("gemini", clave) not in _CLIENTES:
-        _CLIENTES[("gemini", clave)] = genai.Client(api_key=clave)
+        from google.genai import types
+
+        # 45 s por intento: si un modelo no responde, se pasa al siguiente sin colgar la app
+        _CLIENTES[("gemini", clave)] = genai.Client(
+            api_key=clave, http_options=types.HttpOptions(timeout=45_000))
     return _CLIENTES[("gemini", clave)]
 
 
-RESERVA_GEMINI = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+RESERVA_GEMINI = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.0-flash-lite"]
 
 
 def ordenar_modelos_gemini(nombres: list[str]) -> list[str]:
-    """Ordena los Gemini Flash de la cuenta: estables primero, del mas nuevo al mas antiguo.
-    Evita variantes especiales (lite, imagen, voz, live, embeddings)."""
-    excluir = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "8b")
-    candidatos = []
+    """Ordena los Gemini Flash de la cuenta para combinar calidad y disponibilidad:
+    el Flash estable mas nuevo, luego el Flash-Lite mas nuevo (mas rapido y con menos
+    saturacion), y despues el resto. Los 'preview' van al final."""
+    excluir = ("image", "tts", "audio", "live", "embedding", "thinking", "exp", "8b")
+    flash, lite = [], []
     for n in nombres:
         corto = n.split("/")[-1]
-        m = re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash(-preview.*)?", corto)
+        m = re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash(-lite)?(-preview.*)?", corto)
         if not m or any(x in corto for x in excluir):
             continue
-        candidatos.append((m.group(2) is None, float(m.group(1)), corto))
-    return [c[2] for c in sorted(candidatos, reverse=True)]
+        clave = (m.group(3) is None, float(m.group(1)), corto)
+        (lite if m.group(2) else flash).append(clave)
+    flash = [c[2] for c in sorted(flash, reverse=True)]
+    lite = [c[2] for c in sorted(lite, reverse=True)]
+    return flash[:1] + lite[:1] + flash[1:] + lite[1:]
 
 
 def elegir_modelo_gemini(nombres: list[str]) -> str | None:
@@ -126,26 +134,34 @@ def modelo_gemini() -> str:
     return _CLIENTES.get("modelo_ok") or modelos_gemini()[0]
 
 
-ERRORES_REINTENTABLES = ("503", "429", "404", "500", "UNAVAILABLE", "RESOURCE_EXHAUSTED",
-                         "NOT_FOUND", "overloaded", "high demand")
+ERRORES_REINTENTABLES = ("503", "429", "404", "500", "504", "UNAVAILABLE", "RESOURCE_EXHAUSTED",
+                         "NOT_FOUND", "DEADLINE", "overloaded", "high demand", "timed out", "Timeout")
 
 
-def _generar_gemini(max_modelos: int = 4, **kwargs):
-    """generate_content con respaldo: prueba modelos en orden hasta que uno responda."""
+def _generar_gemini(max_modelos: int = 6, **kwargs):
+    """generate_content con respaldo: si un modelo esta saturado o no existe, espera un
+    momento, reintenta una vez y luego pasa al siguiente. Recuerda el que funciono."""
+    import time
+
     lista = modelos_gemini()
     preferido = _CLIENTES.get("modelo_ok")
     if preferido in lista:
         lista = [preferido] + [m for m in lista if m != preferido]
     ultimo_error: Exception | None = None
     for modelo in lista[:max_modelos]:
-        try:
-            resp = _gemini().models.generate_content(model=modelo, **kwargs)
-            _CLIENTES["modelo_ok"] = modelo
-            return resp
-        except Exception as e:  # saturado o inexistente: probar el siguiente
-            if not any(x in str(e) for x in ERRORES_REINTENTABLES):
-                raise
-            ultimo_error = e
+        for intento in range(2):
+            try:
+                resp = _gemini().models.generate_content(model=modelo, **kwargs)
+                _CLIENTES["modelo_ok"] = modelo
+                return resp
+            except Exception as e:
+                if not any(x in str(e) for x in ERRORES_REINTENTABLES):
+                    raise
+                ultimo_error = e
+                if "404" in str(e) or "NOT_FOUND" in str(e):
+                    break  # no existe: no vale la pena reintentar
+                if intento == 0:
+                    time.sleep(1.5)
     raise RuntimeError(f"Ningun modelo Gemini respondio. Ultimo error: {ultimo_error}")
 
 
@@ -323,6 +339,7 @@ def extraer_compromisos(
         uso["entrada"] += t_in
         uso["salida"] += t_out
         try:
+            uso["modelo"] = MODELO_LLM if p == "groq" else modelo_gemini()
             return ExtraccionReunion.model_validate_json(_limpiar_json(crudo)), uso
         except ValidationError as e:
             ultimo_error = e

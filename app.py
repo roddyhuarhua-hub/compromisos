@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import os
+import time
 import uuid
 from datetime import date
 from pathlib import Path
@@ -71,6 +72,40 @@ def estilo_figura(fig, alto=320):
     return fig
 
 
+@st.cache_data(show_spinner=False, ttl=7 * 24 * 3600)
+def transcribir_cache(nombre: str, datos: bytes, tipo: str) -> str:
+    """El mismo audio no se transcribe dos veces (respuesta instantanea)."""
+    return ia.transcribir_audio(nombre, datos, tipo)
+
+
+@st.cache_data(show_spinner=False, ttl=7 * 24 * 3600)
+def extraer_cache(texto: str, fecha_iso: str, contexto: str) -> tuple[dict, dict]:
+    """El mismo texto no se procesa dos veces. Solo se guardan los resultados exitosos."""
+    ext, uso = ia.extraer_compromisos(texto, date.fromisoformat(fecha_iso), contexto)
+    return ext.model_dump(mode="json"), uso
+
+
+def procesar(texto: str, fecha_r: date, contexto: str) -> None:
+    """Extrae compromisos con la IA; si falla, la demo sigue con la extraccion guardada."""
+    guardada = ExtraccionReunion.model_validate_json(
+        (EJEMPLO / "extraccion_reunion_demo.json").read_text(encoding="utf-8"))
+    st.session_state.pop("uso", None)
+    if ia.proveedor() is None:
+        st.session_state.extraccion = guardada
+        return
+    inicio = time.perf_counter()
+    try:
+        with st.spinner("La IA está leyendo la reunión…"):
+            datos, uso = extraer_cache(texto, fecha_r.isoformat(), contexto)
+        st.session_state.extraccion = ExtraccionReunion.model_validate(datos)
+        st.session_state.uso = {**uso, "segundos": time.perf_counter() - inicio}
+        st.session_state.costo = ia.costo_estimado(st.session_state.get("minutos", 0), uso)
+    except Exception as e:
+        st.session_state.extraccion = guardada
+        st.error(f"La IA no respondió a tiempo ({str(e)[:160]}). Muestro la extracción guardada; "
+                 "vuelve a intentar en unos segundos.")
+
+
 # ---------------------------------------------------------------- estado de sesion
 if "registro" not in st.session_state:
     st.session_state.registro = registro.cargar(EJEMPLO / "registro_demo.csv")
@@ -127,11 +162,15 @@ with tab_reunion:
             with st.status("Procesando la reunión…", expanded=True) as s:
                 s.write(f"🎧 Transcribiendo ({ia.descripcion_proveedor()})…")
                 datos = fuente_audio.getvalue()
-                st.session_state.texto = ia.transcribir_audio(
+                t0 = time.perf_counter()
+                st.session_state.texto = transcribir_cache(
                     getattr(fuente_audio, "name", "grabacion.wav"), datos,
-                    getattr(fuente_audio, "type", "audio/wav"))
+                    getattr(fuente_audio, "type", None) or "audio/wav")
                 st.session_state.minutos = len(datos) / (16000 * 60)  # aprox. 128 kbps
-                s.update(label="Transcripción lista", state="complete")
+                s.write(f"✅ Transcrito en {time.perf_counter() - t0:.0f} s. 🧠 Extrayendo compromisos…")
+                procesar(st.session_state.texto, fecha_r,
+                         f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")
+                s.update(label="Reunión procesada", state="complete")
     elif origen == "📄 Foto del acta":
         foto = st.file_uploader("Foto o escaneo del acta", type=["jpg", "jpeg", "png"])
         if foto:
@@ -140,6 +179,8 @@ with tab_reunion:
             with st.spinner("Leyendo el acta…"):
                 st.session_state.texto = ia.leer_acta_imagen(foto.getvalue(), foto.type)
                 st.session_state.minutos = 0
+                procesar(st.session_state.texto, fecha_r,
+                         f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")
     elif origen == "⌨️ Texto o transcripción":
         st.session_state.texto = st.text_area("Pega aquí el acta o la transcripción", height=220,
                                               value=st.session_state.get("texto", ""))
@@ -155,21 +196,7 @@ with tab_reunion:
             st.write(texto)
 
         if st.button("🧠 Extraer compromisos", type="primary"):
-            contexto = f"{nombre}. Comunidad {comunidad}, distrito {distrito}."
-            if hay_clave:
-                with st.spinner("La IA está leyendo la reunión…"):
-                    try:
-                        ext, uso = ia.extraer_compromisos(texto, fecha_r, contexto)
-                        st.session_state.costo = ia.costo_estimado(st.session_state.get("minutos", 0), uso)
-                        st.session_state.uso = uso
-                    except Exception as e:  # la demo no se cae: usa la extraccion guardada
-                        st.error(f"No se pudo usar la IA ({e}). Muestro la extracción guardada.")
-                        ext = ExtraccionReunion.model_validate_json(
-                            (EJEMPLO / "extraccion_reunion_demo.json").read_text(encoding="utf-8"))
-            else:
-                ext = ExtraccionReunion.model_validate_json(
-                    (EJEMPLO / "extraccion_reunion_demo.json").read_text(encoding="utf-8"))
-            st.session_state.extraccion = ext
+            procesar(texto, fecha_r, f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")
 
     ext: ExtraccionReunion | None = st.session_state.extraccion
     if ext:
@@ -177,7 +204,8 @@ with tab_reunion:
         st.write(ext.resumen)
         if "uso" in st.session_state:
             u = st.session_state.uso
-            st.caption(f"Tokens: {u['entrada']:,} de entrada, {u['salida']:,} de salida · "
+            st.caption(f"✅ Extraído con IA ({u.get('modelo', '')}) en {u.get('segundos', 0):.1f} s · "
+                       f"tokens: {u['entrada']:,} de entrada, {u['salida']:,} de salida · "
                        f"costo estimado: US$ {st.session_state.costo:.4f}")
         nuevos = registro.desde_extraccion(ext, nombre, fecha_r, comunidad, distrito,
                                            fuente="IA (revisado)")
