@@ -1,0 +1,13 @@
+# Claves: NUNCA subir el .env real
+.env
+.streamlit/secrets.toml
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+# Audios reales de reuniones (datos personales)
+datos/privado/
+*.m4a
+*.wav
