@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import tempfile
 from datetime import date
 from functools import lru_cache
@@ -24,7 +25,7 @@ from .modelos import ExtraccionReunion
 MODELO_WHISPER = os.getenv("MODELO_WHISPER", "whisper-large-v3-turbo")
 MODELO_LLM = os.getenv("MODELO_LLM", "llama-3.3-70b-versatile")
 MODELO_VISION = os.getenv("MODELO_VISION", "meta-llama/llama-4-scout-17b-16e-instruct")
-MODELO_GEMINI = os.getenv("MODELO_GEMINI", "gemini-flash-latest")
+MODELO_GEMINI = os.getenv("MODELO_GEMINI", "")  # vacio = se elige solo (ver modelo_gemini)
 MODELO_WHISPER_LOCAL = os.getenv("MODELO_WHISPER_LOCAL", "base")
 
 # Precios aproximados en USD para estimar costo por reunion (ver README, seccion 7).
@@ -52,7 +53,7 @@ def descripcion_proveedor() -> str:
         return f"Groq · {MODELO_WHISPER} + {MODELO_LLM}"
     if p == "gemini":
         audio = f"Whisper local ({MODELO_WHISPER_LOCAL})" if _hay_whisper_local() else "Gemini"
-        return f"{audio} + {MODELO_GEMINI}"
+        return f"{audio} + {modelo_gemini()}"
     return "sin IA"
 
 
@@ -78,6 +79,42 @@ def _gemini():
     if ("gemini", clave) not in _CLIENTES:
         _CLIENTES[("gemini", clave)] = genai.Client(api_key=clave)
     return _CLIENTES[("gemini", clave)]
+
+
+RESERVA_GEMINI = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
+
+
+def elegir_modelo_gemini(nombres: list[str]) -> str | None:
+    """Del listado de modelos de la cuenta, elige el Gemini Flash estable mas reciente.
+    Evita variantes especiales (lite, imagen, voz, live, embeddings)."""
+    excluir = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "8b")
+    candidatos = []
+    for n in nombres:
+        corto = n.split("/")[-1]
+        m = re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash(-preview.*)?", corto)
+        if not m or any(x in corto for x in excluir):
+            continue
+        estable = m.group(2) is None
+        candidatos.append((estable, float(m.group(1)), corto))
+    return max(candidatos)[2] if candidatos else None
+
+
+def modelo_gemini() -> str:
+    """Modelo Gemini a usar: el de MODELO_GEMINI o el mejor que ofrezca la cuenta."""
+    if MODELO_GEMINI:
+        return MODELO_GEMINI
+    if "modelo_gemini" not in _CLIENTES:
+        elegido = None
+        try:
+            nombres = [
+                m.name for m in _gemini().models.list()
+                if "generateContent" in (getattr(m, "supported_actions", None) or ["generateContent"])
+            ]
+            elegido = elegir_modelo_gemini(nombres)
+        except Exception:
+            pass
+        _CLIENTES["modelo_gemini"] = elegido or RESERVA_GEMINI[0]
+    return _CLIENTES["modelo_gemini"]
 
 
 def _exigir_proveedor() -> str:
@@ -133,7 +170,7 @@ def transcribir_audio(nombre_archivo: str, contenido: bytes, tipo_mime: str = "a
     from google.genai import types
 
     resp = _gemini().models.generate_content(
-        model=MODELO_GEMINI,
+        model=modelo_gemini(),
         contents=[
             "Transcribe literalmente este audio en español. Indica quién habla si se presenta. "
             "Devuelve solo la transcripción.",
@@ -172,7 +209,7 @@ def leer_acta_imagen(contenido: bytes, tipo_mime: str) -> str:
     from google.genai import types
 
     resp = _gemini().models.generate_content(
-        model=MODELO_GEMINI,
+        model=modelo_gemini(),
         contents=[PROMPT_ACTA, types.Part.from_bytes(data=contenido, mime_type=tipo_mime)],
     )
     return resp.text or ""
@@ -220,7 +257,7 @@ def _completar_json(mensajes: list[dict], p: str) -> tuple[str, int, int]:
         for m in mensajes if m["role"] != "system"
     ]
     resp = _gemini().models.generate_content(
-        model=MODELO_GEMINI,
+        model=modelo_gemini(),
         contents=contenidos,
         config=types.GenerateContentConfig(
             system_instruction=sistema,

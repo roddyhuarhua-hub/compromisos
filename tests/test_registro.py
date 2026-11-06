@@ -68,3 +68,11 @@ def test_limpiar_json_y_proveedor(monkeypatch):
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "x")
     assert ia.proveedor() == "gemini"
+
+
+def test_elegir_modelo_gemini():
+    nombres = ["models/gemini-2.0-flash", "models/gemini-2.5-flash", "models/gemini-2.5-flash-lite",
+               "models/gemini-3-flash-preview", "models/gemini-2.5-pro", "models/gemini-2.5-flash-image"]
+    assert ia.elegir_modelo_gemini(nombres) == "gemini-2.5-flash"
+    assert ia.elegir_modelo_gemini(["models/gemini-3-flash-preview"]) == "gemini-3-flash-preview"
+    assert ia.elegir_modelo_gemini(["models/gemini-2.5-pro"]) is None
