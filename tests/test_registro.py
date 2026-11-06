@@ -76,3 +76,21 @@ def test_elegir_modelo_gemini():
     assert ia.elegir_modelo_gemini(nombres) == "gemini-2.5-flash"
     assert ia.elegir_modelo_gemini(["models/gemini-3-flash-preview"]) == "gemini-3-flash-preview"
     assert ia.elegir_modelo_gemini(["models/gemini-2.5-pro"]) is None
+
+
+def test_gemini_salta_modelo_saturado(monkeypatch):
+    llamados = []
+
+    def gen(model, **kw):
+        llamados.append(model)
+        if model == "gemini-3.8-flash":
+            raise RuntimeError("503 UNAVAILABLE. This model is currently experiencing high demand.")
+        return SimpleNamespace(text="ok")
+
+    falso = SimpleNamespace(models=SimpleNamespace(generate_content=gen))
+    monkeypatch.setattr(ia, "_gemini", lambda: falso)
+    monkeypatch.setitem(ia._CLIENTES, "modelos_gemini", ["gemini-3.8-flash", "gemini-2.5-flash"])
+    monkeypatch.delitem(ia._CLIENTES, "modelo_ok", raising=False)
+    assert ia._generar_gemini(contents=["hola"]).text == "ok"
+    assert llamados == ["gemini-3.8-flash", "gemini-2.5-flash"]
+    assert ia.modelo_gemini() == "gemini-2.5-flash"

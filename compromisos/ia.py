@@ -84,8 +84,8 @@ def _gemini():
 RESERVA_GEMINI = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
 
 
-def elegir_modelo_gemini(nombres: list[str]) -> str | None:
-    """Del listado de modelos de la cuenta, elige el Gemini Flash estable mas reciente.
+def ordenar_modelos_gemini(nombres: list[str]) -> list[str]:
+    """Ordena los Gemini Flash de la cuenta: estables primero, del mas nuevo al mas antiguo.
     Evita variantes especiales (lite, imagen, voz, live, embeddings)."""
     excluir = ("lite", "image", "tts", "audio", "live", "embedding", "thinking", "exp", "8b")
     candidatos = []
@@ -94,27 +94,59 @@ def elegir_modelo_gemini(nombres: list[str]) -> str | None:
         m = re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash(-preview.*)?", corto)
         if not m or any(x in corto for x in excluir):
             continue
-        estable = m.group(2) is None
-        candidatos.append((estable, float(m.group(1)), corto))
-    return max(candidatos)[2] if candidatos else None
+        candidatos.append((m.group(2) is None, float(m.group(1)), corto))
+    return [c[2] for c in sorted(candidatos, reverse=True)]
 
 
-def modelo_gemini() -> str:
-    """Modelo Gemini a usar: el de MODELO_GEMINI o el mejor que ofrezca la cuenta."""
-    if MODELO_GEMINI:
-        return MODELO_GEMINI
-    if "modelo_gemini" not in _CLIENTES:
-        elegido = None
+def elegir_modelo_gemini(nombres: list[str]) -> str | None:
+    orden = ordenar_modelos_gemini(nombres)
+    return orden[0] if orden else None
+
+
+def modelos_gemini() -> list[str]:
+    """Lista de modelos a probar, en orden. Si uno esta saturado (503) o no existe (404),
+    la app pasa al siguiente."""
+    if "modelos_gemini" not in _CLIENTES:
+        orden: list[str] = []
         try:
             nombres = [
                 m.name for m in _gemini().models.list()
                 if "generateContent" in (getattr(m, "supported_actions", None) or ["generateContent"])
             ]
-            elegido = elegir_modelo_gemini(nombres)
+            orden = ordenar_modelos_gemini(nombres)
         except Exception:
             pass
-        _CLIENTES["modelo_gemini"] = elegido or RESERVA_GEMINI[0]
-    return _CLIENTES["modelo_gemini"]
+        lista = ([MODELO_GEMINI] if MODELO_GEMINI else []) + orden + RESERVA_GEMINI
+        _CLIENTES["modelos_gemini"] = list(dict.fromkeys(lista))
+    return _CLIENTES["modelos_gemini"]
+
+
+def modelo_gemini() -> str:
+    """Modelo preferido en este momento (el ultimo que funciono, o el primero de la lista)."""
+    return _CLIENTES.get("modelo_ok") or modelos_gemini()[0]
+
+
+ERRORES_REINTENTABLES = ("503", "429", "404", "500", "UNAVAILABLE", "RESOURCE_EXHAUSTED",
+                         "NOT_FOUND", "overloaded", "high demand")
+
+
+def _generar_gemini(max_modelos: int = 4, **kwargs):
+    """generate_content con respaldo: prueba modelos en orden hasta que uno responda."""
+    lista = modelos_gemini()
+    preferido = _CLIENTES.get("modelo_ok")
+    if preferido in lista:
+        lista = [preferido] + [m for m in lista if m != preferido]
+    ultimo_error: Exception | None = None
+    for modelo in lista[:max_modelos]:
+        try:
+            resp = _gemini().models.generate_content(model=modelo, **kwargs)
+            _CLIENTES["modelo_ok"] = modelo
+            return resp
+        except Exception as e:  # saturado o inexistente: probar el siguiente
+            if not any(x in str(e) for x in ERRORES_REINTENTABLES):
+                raise
+            ultimo_error = e
+    raise RuntimeError(f"Ningun modelo Gemini respondio. Ultimo error: {ultimo_error}")
 
 
 def _exigir_proveedor() -> str:
@@ -169,8 +201,7 @@ def transcribir_audio(nombre_archivo: str, contenido: bytes, tipo_mime: str = "a
 
     from google.genai import types
 
-    resp = _gemini().models.generate_content(
-        model=modelo_gemini(),
+    resp = _generar_gemini(
         contents=[
             "Transcribe literalmente este audio en español. Indica quién habla si se presenta. "
             "Devuelve solo la transcripción.",
@@ -208,8 +239,7 @@ def leer_acta_imagen(contenido: bytes, tipo_mime: str) -> str:
 
     from google.genai import types
 
-    resp = _gemini().models.generate_content(
-        model=modelo_gemini(),
+    resp = _generar_gemini(
         contents=[PROMPT_ACTA, types.Part.from_bytes(data=contenido, mime_type=tipo_mime)],
     )
     return resp.text or ""
@@ -256,8 +286,7 @@ def _completar_json(mensajes: list[dict], p: str) -> tuple[str, int, int]:
                       parts=[types.Part.from_text(text=m["content"])])
         for m in mensajes if m["role"] != "system"
     ]
-    resp = _gemini().models.generate_content(
-        model=modelo_gemini(),
+    resp = _generar_gemini(
         contents=contenidos,
         config=types.GenerateContentConfig(
             system_instruction=sistema,
