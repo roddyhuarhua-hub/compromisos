@@ -1,0 +1,29 @@
+id,reunion,fecha_reunion,comunidad,distrito,region,descripcion,responsable,responsable_detalle,beneficiario,tema,fecha_limite,riesgo_conflicto,cumplido,fecha_cumplimiento,cita_textual,fuente
+128bd1a1,Mesa de diálogo Pucará Alto,2025-06-12,C.C. Pucará Alto,San Miguel,Apurímac,Saneamiento de linderos comunales,Estado,,C.C. Pucará Alto,Tierras,2025-08-11,alto,True,2025-08-11,,sintético
+5bcc38d9,Mesa de diálogo Pucará Alto,2025-06-12,C.C. Pucará Alto,San Miguel,Apurímac,Entregar resultados del monitoreo en asamblea,Empresa,,C.C. Pucará Alto,Agua,,alto,False,,,sintético
+3cb271cf,Mesa de diálogo Pucará Alto,2025-06-12,C.C. Pucará Alto,San Miguel,Apurímac,Entregar padrón de comuneros,Comunidad,,C.C. Pucará Alto,Empleo local,2025-12-09,bajo,False,,,sintético
+cebcc1e5,Mesa de diálogo Pucará Alto,2025-06-12,C.C. Pucará Alto,San Miguel,Apurímac,Capacitar a 20 jóvenes en operación de maquinaria,Empresa,,C.C. Pucará Alto,Educación,2025-07-12,medio,True,2025-07-26,,sintético
+08fd2d7c,Mesa de diálogo Pucará Alto,2025-06-12,C.C. Pucará Alto,San Miguel,Apurímac,Contratar mano de obra local no calificada (30%),Empresa,,C.C. Pucará Alto,Empleo local,2025-10-10,alto,True,2025-11-02,,sintético
+f400ca78,Taller de empleo local,2025-10-03,C.C. Llacctapampa,San Miguel,Apurímac,Entregar padrón de comuneros,Comunidad,,C.C. Llacctapampa,Empleo local,2025-12-02,bajo,False,,,sintético
+73d4da56,Taller de empleo local,2025-10-03,C.C. Llacctapampa,San Miguel,Apurímac,Campaña de salud con Diresa,Estado,,C.C. Llacctapampa,Salud,2025-11-17,alto,False,,,sintético
+816b823a,Taller de empleo local,2025-10-03,C.C. Llacctapampa,San Miguel,Apurímac,Incluir canal de riego en presupuesto participativo,Estado,,C.C. Llacctapampa,Infraestructura,2026-04-01,medio,False,,,sintético
+d93efc8b,Taller de empleo local,2025-10-03,C.C. Llacctapampa,San Miguel,Apurímac,Difundir cronograma de obras en quechua,Empresa,,C.C. Llacctapampa,Comunicación,2026-04-01,bajo,False,,,sintético
+89836886,Asamblea informativa EIA,2026-01-20,C.C. Huancarani,Chalhuanca,Apurímac,Difundir cronograma de obras en quechua,Empresa,,C.C. Huancarani,Comunicación,2026-07-19,bajo,False,,,sintético
+9dc72972,Asamblea informativa EIA,2026-01-20,C.C. Huancarani,Chalhuanca,Apurímac,Gestionar inspección de la ANA,Estado,,C.C. Huancarani,Agua,2026-04-20,medio,False,,,sintético
+8e8fa29f,Asamblea informativa EIA,2026-01-20,C.C. Huancarani,Chalhuanca,Apurímac,Facilitar acceso a la zona de monitoreo,Comunidad,,C.C. Huancarani,Monitoreo,2026-02-04,bajo,False,,,sintético
+1f9b0e52,Asamblea informativa EIA,2026-01-20,C.C. Huancarani,Chalhuanca,Apurímac,Realizar monitoreo participativo de agua en el manante,Empresa,,C.C. Huancarani,Monitoreo,2026-03-06,alto,False,,,sintético
+36d987a9,Asamblea informativa EIA,2026-01-20,C.C. Huancarani,Chalhuanca,Apurímac,Entregar padrón de comuneros,Comunidad,,C.C. Huancarani,Empleo local,2026-03-21,bajo,True,2026-04-09,,sintético
+05b501b1,Mesa de trabajo agua,2026-03-15,C.C. Pucará Alto,San Miguel,Apurímac,Campaña de salud con Diresa,Estado,,C.C. Pucará Alto,Salud,2026-09-11,alto,False,,,sintético
+3203c8e6,Mesa de trabajo agua,2026-03-15,C.C. Pucará Alto,San Miguel,Apurímac,Gestionar inspección de la ANA,Estado,,C.C. Pucará Alto,Agua,2026-04-14,medio,False,,,sintético
+f6b60886,Mesa de trabajo agua,2026-03-15,C.C. Pucará Alto,San Miguel,Apurímac,Capacitar a 20 jóvenes en operación de maquinaria,Empresa,,C.C. Pucará Alto,Educación,2026-09-11,medio,True,2026-09-29,,sintético
+aa4f4f5f,Mesa de trabajo agua,2026-03-15,C.C. Pucará Alto,San Miguel,Apurímac,Contratar mano de obra local no calificada (30%),Empresa,,C.C. Pucará Alto,Empleo local,2026-04-14,alto,False,,,sintético
+757dbd9c,Comité de monitoreo,2026-07-08,C.C. Llacctapampa,San Miguel,Apurímac,Entregar padrón de comuneros,Comunidad,,C.C. Llacctapampa,Empleo local,2027-01-04,bajo,False,,,sintético
+4aaa4275,Comité de monitoreo,2026-07-08,C.C. Llacctapampa,San Miguel,Apurímac,Revegetar zona afectada por el depósito,Empresa,,C.C. Llacctapampa,Ambiente,2026-07-23,alto,True,2026-07-13,,sintético
+2eb91ba6,Comité de monitoreo,2026-07-08,C.C. Llacctapampa,San Miguel,Apurímac,Gestionar inspección de la ANA,Estado,,C.C. Llacctapampa,Agua,2026-07-23,medio,False,,,sintético
+89114e00,Comité de monitoreo,2026-07-08,C.C. Llacctapampa,San Miguel,Apurímac,Realizar monitoreo participativo de agua en el manante,Empresa,,C.C. Llacctapampa,Monitoreo,2027-01-04,alto,False,,,sintético
+06d20b5f,Comité de monitoreo,2026-07-08,C.C. Llacctapampa,San Miguel,Apurímac,Incluir canal de riego en presupuesto participativo,Estado,,C.C. Llacctapampa,Infraestructura,2026-08-07,medio,True,2026-08-20,,sintético
+58d98208,Reunión con rondas campesinas,2026-09-25,C.C. Huancarani,Chalhuanca,Apurímac,Contratar mano de obra local no calificada (30%),Empresa,,C.C. Huancarani,Empleo local,2026-11-24,alto,False,,,sintético
+84f77b64,Reunión con rondas campesinas,2026-09-25,C.C. Huancarani,Chalhuanca,Apurímac,Mejorar trocha carrozable al anexo,Estado,,C.C. Huancarani,Infraestructura,,medio,False,,,sintético
+ec424e1a,Reunión con rondas campesinas,2026-09-25,C.C. Huancarani,Chalhuanca,Apurímac,Difundir cronograma de obras en quechua,Empresa,,C.C. Huancarani,Comunicación,2026-12-24,bajo,False,,,sintético
+8acef8da,Reunión con rondas campesinas,2026-09-25,C.C. Huancarani,Chalhuanca,Apurímac,Incluir canal de riego en presupuesto participativo,Estado,,C.C. Huancarani,Infraestructura,2026-12-24,medio,False,,,sintético
+062665a2,Reunión con rondas campesinas,2026-09-25,C.C. Huancarani,Chalhuanca,Apurímac,Revegetar zona afectada por el depósito,Empresa,,C.C. Huancarani,Ambiente,2026-10-10,alto,True,2026-10-14,,sintético
