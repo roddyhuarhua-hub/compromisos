@@ -1,0 +1,61 @@
+from datetime import date
+from pathlib import Path
+from types import SimpleNamespace
+
+import pandas as pd
+
+from compromisos import ia, registro
+from compromisos.modelos import ExtraccionReunion
+
+EJEMPLO = Path(__file__).resolve().parents[1] / "datos" / "ejemplo"
+HOY = date(2026, 11, 6)
+
+
+def _ext():
+    return ExtraccionReunion.model_validate_json(
+        (EJEMPLO / "extraccion_reunion_demo.json").read_text(encoding="utf-8"))
+
+
+def test_estados():
+    df = registro.normalizar(pd.DataFrame([
+        {"descripcion": "a", "fecha_limite": "2026-11-01", "cumplido": "False"},
+        {"descripcion": "b", "fecha_limite": "2026-11-20", "cumplido": "False"},
+        {"descripcion": "c", "fecha_limite": "2027-03-01", "cumplido": "False"},
+        {"descripcion": "d", "fecha_limite": "", "cumplido": "False"},
+        {"descripcion": "e", "fecha_limite": "2026-01-01", "cumplido": "True"},
+    ]))
+    est = registro.con_estado(df, HOY)
+    assert list(est["estado"]) == ["Vencido", "Por vencer", "En plazo", "Sin plazo", "Cumplido"]
+    assert est["dias_restantes"].iloc[0] == -5
+
+
+def test_indicadores_tasa():
+    df = registro.con_estado(registro.cargar(EJEMPLO / "registro_demo.csv"), HOY)
+    k = registro.indicadores(df)
+    assert k["total"] == len(df)
+    assert 0 <= k["tasa_cumplimiento"] <= 1
+
+
+def test_desde_extraccion_y_ficha():
+    ext = _ext()
+    df = registro.desde_extraccion(ext, "Mesa", date(2026, 11, 4), "C.C. Pucará Alto")
+    assert len(df) == 7 and set(df["responsable"]) <= {"Empresa", "Estado", "Comunidad"}
+    ficha = registro.acta_markdown(ext, "Mesa", date(2026, 11, 4), "C.C. Pucará Alto")
+    assert "posta de salud" in ficha and ficha.count("\n| ") == 8
+
+
+def test_extraer_reintenta_si_json_invalido(monkeypatch):
+    respuestas = iter(["{no es json", _ext().model_dump_json()])
+
+    def crear(**kw):
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=next(respuestas)))],
+            usage=SimpleNamespace(prompt_tokens=1000, completion_tokens=500),
+        )
+
+    falso = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=crear)))
+    monkeypatch.setattr(ia, "_cliente", lambda clave=None: falso)
+    ext, uso = ia.extraer_compromisos("texto", date(2026, 11, 4))
+    assert len(ext.compromisos) == 7
+    assert uso == {"entrada": 2000, "salida": 1000}
+    assert ia.costo_estimado(60, uso) > 0.04
