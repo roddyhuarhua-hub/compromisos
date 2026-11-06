@@ -11,8 +11,8 @@ import uuid
 from datetime import date
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 try:  # .env en local; en Streamlit Cloud se usan los Secrets
@@ -22,24 +22,66 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import ia, registro
+from compromisos import ia, registro, visual
 from compromisos.modelos import ExtraccionReunion
 
 RAIZ = Path(__file__).parent
 EJEMPLO = RAIZ / "datos" / "ejemplo"
 
-# Colores de estado (paleta de estado fija: nunca se reutiliza para otra cosa)
-COLOR_ESTADO = {
-    "Vencido": "#d03b3b",
-    "Por vencer": "#fab219",
-    "En plazo": "#2a78d6",
-    "Sin plazo": "#8a8984",
-    "Cumplido": "#0ca30c",
-}
-ICONO_ESTADO = {"Vencido": "🔴", "Por vencer": "🟡", "En plazo": "🔵", "Sin plazo": "⚪", "Cumplido": "🟢"}
-COLOR_PARTE = {"Empresa": "#2a78d6", "Estado": "#eb6834", "Comunidad": "#1baf7a", "Otro": "#8a8984"}
+COLOR_ESTADO, ICONO_ESTADO = visual.COLOR_ESTADO, visual.ICONO_ESTADO
+COMUNIDADES = pd.read_csv(EJEMPLO / "comunidades.csv")
 
-st.set_page_config(page_title="Compromisos", page_icon="🤝", layout="wide")
+st.set_page_config(page_title="Compromisos · seguimiento social con IA", page_icon="🤝", layout="wide")
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+html, body, [class*="css"], .stMarkdown, .stTextInput, .stButton button { font-family: 'Inter', 'Segoe UI', sans-serif; }
+.block-container { padding-top: 1.6rem; max-width: 1400px; }
+.hero { background: linear-gradient(120deg, #0d366b 0%, #1c5cab 55%, #2a78d6 100%); color: #fff;
+        border-radius: 18px; padding: 26px 30px; margin-bottom: 18px; position: relative; overflow: hidden; }
+.hero:after { content: ""; position: absolute; right: -60px; top: -60px; width: 260px; height: 260px;
+              border-radius: 50%; background: rgba(255,255,255,0.07); }
+.hero h1 { color: #fff; font-size: 30px; font-weight: 700; margin: 0 0 4px 0; padding: 0; }
+.hero p { color: rgba(255,255,255,0.88); font-size: 15px; margin: 0; max-width: 820px; }
+.hero .chips { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+.hero .chip { background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25);
+              padding: 4px 12px; border-radius: 999px; font-size: 12.5px; }
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 4px 0 16px 0; }
+@media (max-width: 900px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.kpi { background: #fff; border: 1px solid rgba(31,42,55,0.08); border-radius: 14px; padding: 14px 16px;
+       box-shadow: 0 1px 2px rgba(16,24,40,0.04); border-top: 4px solid var(--c); }
+.kpi .lab { font-size: 12.5px; color: #5b6675; font-weight: 500; }
+.kpi .val { font-size: 30px; font-weight: 700; color: #1f2a37; line-height: 1.2; margin-top: 2px; }
+.kpi .sub { font-size: 12px; color: #5b6675; }
+.card { background: #fff; border: 1px solid rgba(31,42,55,0.08); border-radius: 14px; padding: 14px 16px;
+        box-shadow: 0 1px 2px rgba(16,24,40,0.04); margin-bottom: 10px; }
+.card h4 { margin: 0 0 6px 0; font-size: 15px; color: #1f2a37; }
+.alerta { border-left: 4px solid var(--c); padding: 10px 12px; border-radius: 10px; background: #fff;
+          border-top: 1px solid rgba(31,42,55,0.06); border-right: 1px solid rgba(31,42,55,0.06);
+          border-bottom: 1px solid rgba(31,42,55,0.06); margin-bottom: 8px; }
+.alerta .t { font-weight: 600; color: #1f2a37; font-size: 13.5px; }
+.alerta .m { font-size: 12px; color: #5b6675; margin-top: 2px; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+         color: #1f2a37; background: color-mix(in srgb, var(--c) 18%, white); border: 1px solid var(--c); }
+.sem { display: flex; align-items: center; justify-content: space-between; padding: 8px 4px;
+       border-bottom: 1px solid rgba(31,42,55,0.06); }
+.sem:last-child { border-bottom: none; }
+.sem .n { font-weight: 600; color: #1f2a37; font-size: 13.5px; }
+.sem .d { font-size: 12px; color: #5b6675; }
+.bar { height: 6px; border-radius: 4px; background: rgba(31,42,55,0.07); margin-top: 4px; width: 140px; }
+.bar > div { height: 6px; border-radius: 4px; background: var(--c); }
+.stTabs [data-baseweb="tab-list"] { gap: 6px; }
+.stTabs [data-baseweb="tab"] { font-weight: 600; font-size: 15px; padding: 8px 14px; }
+div[data-testid="stPlotlyChart"] { background: #fff; border: 1px solid rgba(31,42,55,0.08); border-radius: 14px;
+                                   padding: 6px 8px; box-shadow: 0 1px 2px rgba(16,24,40,0.04); }
+</style>
+""", unsafe_allow_html=True)
+
+
+def kpi(lab: str, val: str, sub: str, color: str) -> str:
+    return f'<div class="kpi" style="--c:{color}"><div class="lab">{lab}</div><div class="val">{val}</div><div class="sub">{sub}</div></div>'
+
 
 
 def cargar_claves() -> None:
@@ -53,23 +95,6 @@ def cargar_claves() -> None:
 
 
 cargar_claves()
-
-
-def estilo_figura(fig, alto=320):
-    fig.update_layout(
-        height=alto,
-        margin=dict(l=10, r=10, t=50, b=10),
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        legend=dict(orientation="h", yanchor="top", y=-0.12, x=0, title=None),
-        bargap=0.35,
-        font=dict(size=13),
-    )
-    fig.update_xaxes(showgrid=True, gridcolor="rgba(128,128,128,0.15)", zeroline=False)
-    fig.update_yaxes(showgrid=False)
-    fig.update_traces(marker_line_width=2, marker_line_color="rgba(255,255,255,0.9)",
-                      selector=dict(type="bar"))
-    return fig
 
 
 @st.cache_data(show_spinner=False, ttl=7 * 24 * 3600)
@@ -114,8 +139,8 @@ if "extraccion" not in st.session_state:
 
 # ---------------------------------------------------------------- barra lateral
 with st.sidebar:
-    st.title("🤝 Compromisos")
-    st.caption("De la reunión comunal al seguimiento de cada acuerdo.")
+    st.markdown("## 🤝 Compromisos")
+    st.caption("Seguimiento de compromisos sociales con IA, para equipos de relaciones comunitarias.")
     hay_clave = ia.proveedor() is not None
     if hay_clave:
         st.success(f"IA conectada: {ia.descripcion_proveedor()}")
@@ -131,10 +156,27 @@ with st.sidebar:
     if st.button("Volver al registro de ejemplo"):
         st.session_state.registro = registro.cargar(EJEMPLO / "registro_demo.csv")
         st.rerun()
-    st.caption("Datos de ejemplo sintéticos: comunidades y empresa ficticias.")
+    st.caption("Datos de ejemplo sintéticos: comunidades, empresa y ubicaciones ficticias.")
 
-tab_reunion, tab_tablero, tab_registro = st.tabs(
-    ["1 · Nueva reunión", "2 · Tablero de seguimiento", "3 · Registro y descargas"]
+base_df = registro.con_estado(st.session_state.registro, hoy)
+k_total = registro.indicadores(base_df)
+st.markdown(f"""
+<div class="hero">
+  <h1>🤝 Compromisos</h1>
+  <p>De la mesa de diálogo al seguimiento de cada acuerdo. La IA escucha la reunión, extrae quién prometió qué
+  y para cuándo, y alerta antes de que un compromiso incumplido se convierta en conflicto.</p>
+  <div class="chips">
+    <span class="chip">📍 {base_df['comunidad'].nunique()} comunidades</span>
+    <span class="chip">🗓️ {base_df['reunion'].nunique()} reuniones</span>
+    <span class="chip">📌 {k_total['total']} compromisos</span>
+    <span class="chip">🎙️ Whisper + Gemini</span>
+    <span class="chip">Corte: {hoy:%d/%m/%Y}</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+tab_tablero, tab_reunion, tab_registro = st.tabs(
+    ["📊 Panel ejecutivo", "🎙️ Nueva reunión", "📋 Registro y descargas"]
 )
 
 # ---------------------------------------------------------------- 1. nueva reunion
@@ -143,8 +185,9 @@ with tab_reunion:
     c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
     nombre = c1.text_input("Nombre de la reunión", "Mesa de trabajo Pucará Alto")
     fecha_r = c2.date_input("Fecha", value=date(2026, 11, 4), format="DD/MM/YYYY")
-    comunidad = c3.text_input("Comunidad", "C.C. Pucará Alto")
-    distrito = c4.text_input("Distrito", "San Miguel")
+    comunidad = c3.selectbox("Comunidad", COMUNIDADES["comunidad"].tolist(), index=0, accept_new_options=True)
+    distrito_def = COMUNIDADES.set_index("comunidad")["distrito"].get(comunidad, "")
+    distrito = c4.text_input("Distrito", distrito_def)
 
     origen = st.radio(
         "¿Qué tienes de la reunión?",
@@ -241,85 +284,103 @@ with tab_reunion:
             st.session_state.registro = registro.normalizar(
                 pd.concat([st.session_state.registro, base], ignore_index=True))
             st.session_state.extraccion = None
-            st.success("Guardado. Revisa el tablero de seguimiento.")
+            st.toast("✅ Guardado. Mira el Panel ejecutivo: el mapa y las alertas ya lo incluyen.")
+            st.rerun()
         b2.download_button(
             "⬇️ Descargar ficha de la reunión (.md)",
             registro.acta_markdown(ext, nombre, fecha_r, comunidad),
             file_name=f"ficha_{fecha_r:%Y%m%d}.md",
         )
 
-# ---------------------------------------------------------------- 2. tablero
+# ---------------------------------------------------------------- 2. panel ejecutivo
 with tab_tablero:
-    df = registro.con_estado(st.session_state.registro, hoy)
+    df = base_df
     f1, f2, f3 = st.columns(3)
-    comunidades = f1.multiselect("Comunidad", sorted(df["comunidad"].unique()), placeholder="Todas")
+    comunidades_f = f1.multiselect("Comunidad", sorted(df["comunidad"].unique()), placeholder="Todas")
     partes = f2.multiselect("Responsable", ["Empresa", "Estado", "Comunidad", "Otro"], placeholder="Todas")
-    temas = f3.multiselect("Tema", sorted(df["tema"].unique()), placeholder="Todas")
-    if comunidades:
-        df = df[df["comunidad"].isin(comunidades)]
+    temas = f3.multiselect("Tema", sorted(df["tema"].unique()), placeholder="Todos")
+    if comunidades_f:
+        df = df[df["comunidad"].isin(comunidades_f)]
     if partes:
         df = df[df["responsable"].isin(partes)]
     if temas:
         df = df[df["tema"].isin(temas)]
 
     k = registro.indicadores(df)
-    m = st.columns(5)
-    m[0].metric("Compromisos", k["total"])
-    m[1].metric("🔴 Vencidos sin cumplir", k["vencidos"])
-    m[2].metric(f"🟡 Vencen en {registro.DIAS_ALERTA} días", k["por_vencer"])
-    m[3].metric("Cumplimiento", f"{k['tasa_cumplimiento']:.0%}" if k["tasa_cumplimiento"] is not None else "–",
-                help="Cumplidos entre los que ya debían cumplirse (cumplidos + vencidos)")
-    m[4].metric("⚠️ Riesgo alto abiertos", k["alto_riesgo_abiertos"])
+    tasa = k["tasa_cumplimiento"]
+    ind = visual.indice_comunidades(df, COMUNIDADES) if not df.empty else pd.DataFrame()
+    criticas = int((ind["semaforo"] == "Crítico").sum()) if not ind.empty else 0
+    st.markdown('<div class="kpis">' + "".join([
+        kpi("Compromisos registrados", f"{k['total']}", f"{df['reunion'].nunique()} reuniones", "#1c5cab"),
+        kpi("🔴 Vencidos sin cumplir", f"{k['vencidos']}", "requieren acción inmediata", COLOR_ESTADO["Vencido"]),
+        kpi(f"🟡 Vencen en {registro.DIAS_ALERTA} días", f"{k['por_vencer']}", "programar seguimiento", COLOR_ESTADO["Por vencer"]),
+        kpi("✅ Tasa de cumplimiento", f"{tasa:.0%}" if tasa is not None else "–", "de los ya exigibles", COLOR_ESTADO["Cumplido"]),
+        kpi("⚠️ Comunidades en estado crítico", f"{criticas}", f"{k['alto_riesgo_abiertos']} compromisos de riesgo alto abiertos", "#a32424"),
+    ]) + "</div>", unsafe_allow_html=True)
 
-    alertas = df[df["estado"].isin(["Vencido", "Por vencer"])].sort_values("dias_restantes")
-    if not alertas.empty:
-        st.markdown("#### Alertas: atender primero")
-        vista = alertas.assign(
-            Estado=alertas["estado"].map(lambda e: f"{ICONO_ESTADO[e]} {e}"),
-            Días=alertas["dias_restantes"],
-        )[["Estado", "Días", "descripcion", "responsable", "comunidad", "riesgo_conflicto", "fecha_limite"]]
-        st.dataframe(vista.head(8), hide_index=True, width="stretch", column_config={
-            "descripcion": "Compromiso", "responsable": "Responsable", "comunidad": "Comunidad",
-            "riesgo_conflicto": "Riesgo",
-            "fecha_limite": st.column_config.DateColumn("Plazo", format="DD/MM/YYYY"),
-            "Días": st.column_config.NumberColumn(help="Negativo = días de atraso"),
-        })
+    if df.empty:
+        st.info("No hay compromisos con estos filtros.")
+    else:
+        # --- mapa + semaforo
+        reuniones = (df.groupby(["reunion", "fecha_reunion", "comunidad"]).size()
+                     .reset_index(name="compromisos").merge(COMUNIDADES, on="comunidad", how="left"))
+        rng = np.random.default_rng(7)  # dispersion leve para que el calor no sea un punto
+        reuniones["lat"] = reuniones["lat"] + rng.normal(0, 0.012, len(reuniones))
+        reuniones["lon"] = reuniones["lon"] + rng.normal(0, 0.012, len(reuniones))
+        c1, c2 = st.columns([1.75, 1])
+        with c1:
+            st.markdown("#### 🗺️ Mapa de calor de reuniones y semáforo por comunidad")
+            st.plotly_chart(visual.mapa(ind, reuniones), width="stretch",
+                            config={"scrollZoom": True, "displayModeBar": False})
+            st.caption("Azul: intensidad de reuniones. Círculos: comunidades, coloreadas por índice de riesgo; "
+                       "el tamaño crece con los compromisos vencidos.")
+        with c2:
+            st.markdown("#### 🚦 Semáforo social")
+            filas = []
+            for _, r in ind.iterrows():
+                col = visual.SEMAFORO[r["semaforo"]]
+                filas.append(
+                    f'<div class="sem"><div><div class="n">{r["comunidad"].replace("C.C. ", "")}</div>'
+                    f'<div class="d">{int(r["vencidos"])} vencidos · {int(r["reuniones"])} reuniones · '
+                    f'cumple {r["cumplimiento"]:.0%}</div>'
+                    f'<div class="bar"><div style="width:{max(4, r["indice"])}%; --c:{col}"></div></div></div>'
+                    f'<span class="badge" style="--c:{col}">{r["semaforo"]} · {r["indice"]:.0f}</span></div>')
+            st.markdown('<div class="card">' + "".join(filas) + "</div>", unsafe_allow_html=True)
+            st.markdown("##### Cumplimiento global")
+            st.plotly_chart(visual.gauge(tasa, 200), width="stretch", config={"displayModeBar": False})
 
-    if not df.empty:
-        g1, g2 = st.columns(2)
-        por_parte = df.groupby(["responsable", "estado"]).size().reset_index(name="n")
-        fig = px.bar(por_parte, y="responsable", x="n", color="estado", orientation="h",
-                     color_discrete_map=COLOR_ESTADO,
-                     category_orders={"estado": registro.ORDEN_ESTADO},
-                     labels={"n": "Compromisos", "responsable": "", "estado": "Estado"},
-                     title="¿Quién está incumpliendo?")
-        g1.plotly_chart(estilo_figura(fig), width="stretch")
+        # --- alertas + estados
+        c3, c4 = st.columns([1.2, 1])
+        with c3:
+            st.markdown("#### 🔔 Alertas: atender primero")
+            alertas = df[df["estado"].isin(["Vencido", "Por vencer"])].copy()
+            alertas["peso"] = alertas["riesgo_conflicto"].map(visual.PESO_RIESGO)
+            alertas["cercania"] = alertas["dias_restantes"].abs()  # lo recien vencido o por vencer primero
+            alertas = alertas.sort_values(["peso", "cercania"], ascending=[False, True]).head(6)
+            html = []
+            for _, r in alertas.iterrows():
+                col = COLOR_ESTADO[r["estado"]]
+                dias = int(r["dias_restantes"])
+                cuando = f"{-dias} días de atraso" if dias < 0 else f"vence en {dias} días"
+                html.append(
+                    f'<div class="alerta" style="--c:{col}"><div class="t">{ICONO_ESTADO[r["estado"]]} {r["descripcion"]}</div>'
+                    f'<div class="m">{r["comunidad"]} · {r["responsable"]} ({r["responsable_detalle"] or "-"}) · '
+                    f'<b>{cuando}</b> · riesgo {r["riesgo_conflicto"]}</div></div>')
+            st.markdown("".join(html) or "Sin alertas 🎉", unsafe_allow_html=True)
+        with c4:
+            st.markdown("#### Estado de los compromisos")
+            st.plotly_chart(visual.dona_estados(df, registro.ORDEN_ESTADO), width="stretch",
+                            config={"displayModeBar": False})
 
-        abiertos = df[df["estado"] == "Vencido"].groupby("tema").size().sort_values().reset_index(name="n")
-        fig2 = px.bar(abiertos, y="tema", x="n", orientation="h", text="n",
-                      color_discrete_sequence=[COLOR_ESTADO["Vencido"]],
-                      labels={"n": "Vencidos sin cumplir", "tema": ""},
-                      title="Compromisos vencidos por tema")
-        fig2.update_traces(textposition="outside", cliponaxis=False)
-        g2.plotly_chart(estilo_figura(fig2), width="stretch")
+        # --- calendario
+        st.plotly_chart(visual.calendario(df, hoy), width="stretch", config={"displayModeBar": False})
 
-        por_reunion = (df.groupby(["fecha_reunion", "reunion"])
-                       .apply(lambda g: pd.Series({
-                           "cumplidos": (g["estado"] == "Cumplido").sum(),
-                           "exigibles": g["estado"].isin(["Cumplido", "Vencido"]).sum(),
-                           "total": len(g)}), include_groups=False)
-                       .reset_index().sort_values("fecha_reunion"))
-        por_reunion["tasa"] = por_reunion["cumplidos"] / por_reunion["exigibles"].where(por_reunion["exigibles"] > 0)
-        por_reunion["etiqueta"] = por_reunion["fecha_reunion"].astype(str).str[:7] + " · " + por_reunion["reunion"]
-        fig3 = px.bar(por_reunion, x="etiqueta", y="tasa",
-                      color_discrete_sequence=[COLOR_PARTE["Empresa"]],
-                      hover_data={"cumplidos": True, "exigibles": True, "total": True, "etiqueta": False},
-                      labels={"tasa": "Tasa de cumplimiento", "etiqueta": ""},
-                      title="Cumplimiento por reunión (de los compromisos ya exigibles)")
-        fig3.update_yaxes(tickformat=".0%", range=[0, 1], showgrid=True,
-                          gridcolor="rgba(128,128,128,0.15)")
-        fig3.update_xaxes(showgrid=False)
-        st.plotly_chart(estilo_figura(fig3, 340), width="stretch")
+        # --- analisis
+        c5, c6 = st.columns(2)
+        c5.plotly_chart(visual.calor_tema(df), width="stretch", config={"displayModeBar": False})
+        c6.plotly_chart(visual.quien_incumple(df, registro.ORDEN_ESTADO), width="stretch",
+                        config={"displayModeBar": False})
+        st.plotly_chart(visual.brecha(df, hoy), width="stretch", config={"displayModeBar": False})
 
 # ---------------------------------------------------------------- 3. registro
 with tab_registro:

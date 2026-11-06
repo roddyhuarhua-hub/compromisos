@@ -108,3 +108,14 @@ def test_transcribir_respaldo_gemini_si_whisper_falla(monkeypatch):
     monkeypatch.setattr(ia, "_whisper_local", roto)
     monkeypatch.setattr(ia, "_generar_gemini", lambda **kw: SimpleNamespace(text="hola desde gemini"))
     assert ia.transcribir_audio("a.wav", b"RIFF....", "audio/wav") == "hola desde gemini"
+
+
+def test_indice_comunidades():
+    from compromisos import visual
+
+    df = registro.con_estado(registro.cargar(EJEMPLO / "registro_demo.csv"), HOY)
+    com = pd.read_csv(EJEMPLO / "comunidades.csv")
+    ind = visual.indice_comunidades(df, com)
+    assert ind["indice"].between(0, 100).all()
+    assert set(ind["semaforo"]) <= {"Estable", "Atención", "Crítico"}
+    assert ind["lat"].notna().all()

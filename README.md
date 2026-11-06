@@ -36,7 +36,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 2. **Whisper** lo transcribe en español.
 3. Un **LLM con salida estructurada** (validada con Pydantic) extrae cada compromiso: qué, quién (empresa, Estado, comunidad), plazo en fecha exacta, tema, riesgo de conflicto y la **cita textual** que lo respalda. También lista las demandas que quedaron **sin acuerdo**.
 4. El relacionista **revisa y corrige** en una tabla antes de guardar (la IA propone, la persona decide).
-5. El **tablero** muestra vencidos, por vencer, tasa de cumplimiento, quién incumple y en qué temas. Se descarga el registro (CSV/Excel) y una ficha de la reunión para compartir con la comunidad.
+5. El **panel ejecutivo** muestra un mapa de calor de reuniones con el semáforo de riesgo de cada comunidad, alertas priorizadas, el calendario de vencimientos, la brecha de cumplimiento acumulada, quién incumple y en qué temas. Se descarga el registro (CSV/Excel) y una ficha de la reunión para compartir con la comunidad.
 
 **Insight.** El problema no es que falte un lugar donde anotar los compromisos, sino que **anotarlos cuesta trabajo extra justo después de una reunión tensa**, y por eso no se hace. Si la captura sale sola del audio, el registro se llena. La cita textual es clave: en una mesa de diálogo lo que vale es lo que se dijo, y la cita permite verificarlo.
 
@@ -66,9 +66,9 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 
 - **Capturas:**
 
-  | Nueva reunión | Tablero | Registro |
+  | Panel ejecutivo | Nueva reunión | Registro |
   |---|---|---|
-  | ![](img/01_nueva_reunion.png) | ![](img/02_tablero.png) | ![](img/03_registro.png) |
+  | ![](img/02_tablero.png) | ![](img/01_nueva_reunion.png) | ![](img/03_registro.png) |
 
 - **Arquitectura:**
 
@@ -134,7 +134,7 @@ Yo definí el problema y el flujo desde mi experiencia en campo, hice las entrev
 
 ## Datos y privacidad
 
-- Los datos de ejemplo son **sintéticos**: comunidades, empresa y personas ficticias.
+- Los datos de ejemplo son **sintéticos**: comunidades, empresa, personas y ubicaciones ficticias (`scripts/generar_registro_demo.py`). El índice de riesgo por comunidad está documentado en `compromisos/visual.py`.
 - Los audios reales de reuniones no se suben al repositorio (`.gitignore`) y no se guardan en el servidor: el registro vive en la sesión y se descarga.
 - No se suben claves: se usa `.env` (ignorado) o los *Secrets* de Streamlit Cloud.
 
