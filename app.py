@@ -41,13 +41,17 @@ COLOR_PARTE = {"Empresa": "#2a78d6", "Estado": "#eb6834", "Comunidad": "#1baf7a"
 st.set_page_config(page_title="Compromisos", page_icon="🤝", layout="wide")
 
 
-def clave_api() -> str | None:
-    try:
-        if "GROQ_API_KEY" in st.secrets:
-            return st.secrets["GROQ_API_KEY"]
-    except Exception:
-        pass
-    return os.getenv("GROQ_API_KEY")
+def cargar_claves() -> None:
+    """Copia las claves de Streamlit Secrets al entorno (en local se leen de .env)."""
+    for nombre in ("GROQ_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        try:
+            if nombre in st.secrets and not os.getenv(nombre):
+                os.environ[nombre] = st.secrets[nombre]
+        except Exception:
+            pass
+
+
+cargar_claves()
 
 
 def estilo_figura(fig, alto=320):
@@ -77,9 +81,9 @@ if "extraccion" not in st.session_state:
 with st.sidebar:
     st.title("🤝 Compromisos")
     st.caption("De la reunión comunal al seguimiento de cada acuerdo.")
-    hay_clave = bool(clave_api())
+    hay_clave = ia.proveedor() is not None
     if hay_clave:
-        st.success("IA conectada (Groq)")
+        st.success(f"IA conectada: {ia.descripcion_proveedor()}")
     else:
         st.warning("Sin clave de IA: puedes usar la reunión de ejemplo.")
     hoy = st.date_input("Fecha de corte", value=date.today(), format="DD/MM/YYYY")
@@ -121,10 +125,11 @@ with tab_reunion:
         fuente_audio = audio or grabado
         if fuente_audio and st.button("Transcribir y extraer", type="primary", disabled=not hay_clave):
             with st.status("Procesando la reunión…", expanded=True) as s:
-                s.write("🎧 Transcribiendo con Whisper…")
+                s.write(f"🎧 Transcribiendo ({ia.descripcion_proveedor()})…")
                 datos = fuente_audio.getvalue()
                 st.session_state.texto = ia.transcribir_audio(
-                    getattr(fuente_audio, "name", "grabacion.wav"), datos, clave_api())
+                    getattr(fuente_audio, "name", "grabacion.wav"), datos,
+                    getattr(fuente_audio, "type", "audio/wav"))
                 st.session_state.minutos = len(datos) / (16000 * 60)  # aprox. 128 kbps
                 s.update(label="Transcripción lista", state="complete")
     elif origen == "📄 Foto del acta":
@@ -133,7 +138,7 @@ with tab_reunion:
             st.image(foto, width=320)
         if foto and st.button("Leer acta y extraer", type="primary", disabled=not hay_clave):
             with st.spinner("Leyendo el acta…"):
-                st.session_state.texto = ia.leer_acta_imagen(foto.getvalue(), foto.type, clave_api())
+                st.session_state.texto = ia.leer_acta_imagen(foto.getvalue(), foto.type)
                 st.session_state.minutos = 0
     elif origen == "⌨️ Texto o transcripción":
         st.session_state.texto = st.text_area("Pega aquí el acta o la transcripción", height=220,
@@ -154,7 +159,7 @@ with tab_reunion:
             if hay_clave:
                 with st.spinner("La IA está leyendo la reunión…"):
                     try:
-                        ext, uso = ia.extraer_compromisos(texto, fecha_r, contexto, clave_api())
+                        ext, uso = ia.extraer_compromisos(texto, fecha_r, contexto)
                         st.session_state.costo = ia.costo_estimado(st.session_state.get("minutos", 0), uso)
                         st.session_state.uso = uso
                     except Exception as e:  # la demo no se cae: usa la extraccion guardada

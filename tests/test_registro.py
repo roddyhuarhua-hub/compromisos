@@ -54,8 +54,17 @@ def test_extraer_reintenta_si_json_invalido(monkeypatch):
         )
 
     falso = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=crear)))
-    monkeypatch.setattr(ia, "_cliente", lambda clave=None: falso)
+    monkeypatch.setenv("GROQ_API_KEY", "x")
+    monkeypatch.setattr(ia, "_groq", lambda: falso)
     ext, uso = ia.extraer_compromisos("texto", date(2026, 11, 4))
     assert len(ext.compromisos) == 7
-    assert uso == {"entrada": 2000, "salida": 1000}
+    assert uso["entrada"] == 2000 and uso["salida"] == 1000
     assert ia.costo_estimado(60, uso) > 0.04
+
+
+def test_limpiar_json_y_proveedor(monkeypatch):
+    assert ia._limpiar_json('```json\n{"a": 1}\n```') == '{"a": 1}'
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "x")
+    assert ia.proveedor() == "gemini"

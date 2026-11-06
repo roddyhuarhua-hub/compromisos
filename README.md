@@ -58,7 +58,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
   python -m venv .venv
   .venv\Scripts\activate          # en Windows (en Mac/Linux: source .venv/bin/activate)
   pip install -r requirements.txt
-  copy .env.example .env          # y pega tu GROQ_API_KEY dentro de .env
+  copy .env.example .env          # y pega tu GROQ_API_KEY o GEMINI_API_KEY dentro de .env
   streamlit run app.py
   ```
 
@@ -92,7 +92,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
   | Extracción | `llama-3.3-70b-versatile` | Buen español, modo JSON, barato y rápido |
   | Actas en foto | `llama-4-scout-17b-16e-instruct` | Lee manuscritos sin instalar OCR pesado en el servidor |
 
-  Los modelos se cambian con variables de entorno (`.env.example`).
+  **Alternativa con Gemini** (si no hay clave de Groq): el audio se transcribe con **Whisper local** (`faster-whisper`, modelo `base`, en el propio servidor) y la extracción y la lectura de actas usan `gemini-flash-latest` con salida JSON. La app usa la primera clave que encuentre. Los modelos se cambian con variables de entorno (`.env.example`).
 
 ## 7. Modelo de negocio
 
@@ -116,7 +116,7 @@ Margen bruto superior al 95 %. El costo real del negocio es la venta y la implem
 
 | Herramienta (sesión) | Dónde |
 |---|---|
-| Speech-to-text con Whisper (S13) | `compromisos/ia.py` → `transcribir_audio()` |
+| Speech-to-text con Whisper (S13) | `compromisos/ia.py` → `transcribir_audio()` (Whisper en Groq o `faster-whisper` local) |
 | LLM con salidas estructuradas (S08) | `compromisos/ia.py` → `extraer_compromisos()` y `compromisos/modelos.py` (esquema Pydantic) |
 | Dashboards (S05) | `app.py` → pestaña *Tablero de seguimiento* (KPIs, filtros, gráficos Plotly) |
 | Despliegue y evaluación (S12) | Streamlit Community Cloud + `tests/` |
