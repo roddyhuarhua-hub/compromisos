@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import actores, conflictos, ia, laminas_conflictos, panel_imagen, presentacion, registro, visual
+from compromisos import actores, conflictos, ia, laminas_actores, laminas_conflictos, panel_imagen, presentacion, registro, visual
 from compromisos.modelos import ExtraccionReunion
 
 RAIZ = Path(__file__).parent
@@ -195,6 +195,13 @@ def laminas_cache(df, corte, cliente, filtros) -> tuple[bytes, bytes]:
     """Laminas 4K del panel (una por grafico): devuelve (pptx, zip de PNG)."""
     ind_f = visual.indice_comunidades(df, COMUNIDADES)
     lams = panel_imagen.laminas(df, ind_f, registro.indicadores(df), corte, cliente, filtros)
+    return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
+
+
+@st.cache_data(show_spinner=False, max_entries=20)
+def laminas_act_cache(A, R, H, corte, cliente, filtros) -> tuple[bytes, bytes]:
+    """Laminas 4K del mapa de actores: devuelve (pptx, zip de PNG)."""
+    lams = laminas_actores.laminas_actores(A, R, H, corte, cliente, filtros)
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
@@ -532,6 +539,28 @@ with tab_actores:
     R_f = R[R["origen"].isin(nombres) & R["destino"].isin(nombres)]
     G = actores.red(A_f, R_f)
     M = actores.metricas(G)
+
+    filtros_a = " · ".join([f"Mapa al {corte:%d/%m/%Y}"]
+                           + [", ".join(c.replace("C.C. ", "") for c in sel_coms)] * bool(sel_coms)
+                           + [", ".join(sel_tipos)] * bool(sel_tipos))
+    with st.popover("📥 Bajar el mapa de actores para una presentación", width="stretch"):
+        st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: resumen, "
+                    "red de relaciones, actores clave, matriz poder–postura, balance por comunidad, cambios de "
+                    "postura y trayectorias. Respetan la fecha del mapa y los filtros activos.")
+        clave_a = (filtros_a, cliente, len(A_f), len(R_f), int(A_f["postura"].sum()) if not A_f.empty else 0,
+                   len(H))
+        if st.button("Preparar láminas", type="primary", disabled=A_f.empty, key="btn_lam_act"):
+            with st.spinner("Dibujando las láminas en alta resolución…"):
+                st.session_state.laminas_act = (clave_a, laminas_act_cache(A_f, R_f, H, corte, cliente, filtros_a))
+        la_ = st.session_state.get("laminas_act")
+        if la_ and la_[0] == clave_a:
+            q1, q2 = st.columns(2)
+            q1.download_button("⬇️ PowerPoint (.pptx)", la_[1][0], width="stretch", key="dl_act_pptx",
+                               file_name=f"confluentia_mapa_actores_{corte:%Y%m%d}.pptx",
+                               mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+            q2.download_button("⬇️ Imágenes PNG (.zip)", la_[1][1], width="stretch", key="dl_act_zip",
+                               file_name=f"confluentia_mapa_actores_{corte:%Y%m%d}.zip", mime="application/zip")
+        st.caption("Cada gráfico de esta pestaña también se baja suelto con el ícono 📷 al pasar el mouse.")
 
     if M.empty:
         st.info("No hay actores con estos filtros.")

@@ -193,3 +193,18 @@ def test_laminas_conflictos_4k():
     lams = laminas_conflictos.laminas_conflictos(c, visual.indice_comunidades(df, com), com, hoy, "Cliente")
     assert len(lams) == 7
     assert Image.open(_io.BytesIO(lams[1][1])).size == (3840, 2160)
+
+
+def test_laminas_actores_4k():
+    from PIL import Image
+    import io as _io
+
+    from compromisos import actores as ac, laminas_actores
+
+    corte = date(2026, 11, 7)
+    A = ac.normalizar_actores(pd.read_csv("datos/ejemplo/actores_demo.csv"))
+    R = ac.normalizar_relaciones(pd.read_csv("datos/ejemplo/relaciones_demo.csv"))
+    H = ac.normalizar_historial(pd.read_csv("datos/ejemplo/posturas_demo.csv"))
+    lams = laminas_actores.laminas_actores(ac.al_corte(A, H, corte), R, H, corte, "Cliente")
+    assert len(lams) == 7
+    assert Image.open(_io.BytesIO(lams[1][1])).size == (3840, 2160)

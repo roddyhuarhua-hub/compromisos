@@ -114,30 +114,10 @@ def _colorear_puntos(grafico, colores):
 
 
 def _imagen_red(A: pd.DataFrame, R: pd.DataFrame) -> io.BytesIO:
-    g = ac.red(A, R)
-    pos, anclas = ac._posiciones(g)
+    from .laminas_actores import dibujar_red
+
     fig, ax = plt.subplots(figsize=(8.2, 6.2), dpi=200)
-    for u, v, d in g.edges(data=True):
-        color, guion, ancho = ac.REL_ESTILO.get(d["tipo"], ("#8a8984", "solid", 1))
-        ax.plot([pos[u][0], pos[v][0]], [pos[u][1], pos[v][1]], color=color, alpha=0.6, lw=ancho * 0.7,
-                ls={"solid": "-", "dot": ":", "dash": "--"}[guion], zorder=1)
-    marcador = {"circle": "o", "square": "s", "diamond": "D", "triangle-up": "^"}
-    for n, d in g.nodes(data=True):
-        ax.scatter(*pos[n], s=25 + 28 * int(d.get("influencia", 3)), c=ac.POSTURA_COLOR[int(d.get("postura", 0))],
-                   marker=marcador[ac.SIMBOLO_TIPO.get(d.get("tipo"), "circle")], edgecolors="white",
-                   linewidths=1, zorder=3)
-        if int(d.get("influencia", 3)) >= 5 or (not d.get("comunidad") and int(d.get("influencia", 3)) >= 4):
-            ax.annotate(n, pos[n], xytext=(0, -11), textcoords="offset points", ha="center", fontsize=6.5,
-                        color="#1f2a37", zorder=4)
-    for com, c in anclas.items():
-        y = c[1] + (0.95 if c[1] > -1 else -1.15)
-        ax.text(c[0], y, com.replace("C.C. ", ""), ha="center", fontsize=8, fontweight="bold", color="#5b6675",
-                bbox=dict(boxstyle="round,pad=0.25", fc="#eef1f5", ec="none"))
-    for post, txt in ac.POSTURA_TXT.items():
-        ax.scatter([], [], c=ac.POSTURA_COLOR[post], s=40, label=txt)
-    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.06), ncol=5, frameon=False, fontsize=8)
-    ax.set_aspect("equal")
-    ax.axis("off")
+    dibujar_red(ax, A, R, escala=1.0, letra_leyenda=7)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight", transparent=True)
     plt.close(fig)
