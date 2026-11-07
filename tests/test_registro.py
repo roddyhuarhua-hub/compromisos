@@ -147,3 +147,18 @@ def test_mapeo_actores_dinamico():
     assert c.iloc[0]["nombre"] == "Julián Quispe" and c.iloc[0]["delta"] == -2 and c.iloc[0]["evidencia"] == "No cumplen"
     m = ac.metricas(ac.red(A2, R2))
     assert set(m["vinculos"]) == {1}
+
+
+def test_laminas_panel_4k():
+    from PIL import Image
+    import io as _io
+
+    from compromisos import panel_imagen, visual
+
+    hoy = date(2026, 11, 7)
+    df = registro.con_estado(registro.cargar(Path("datos/ejemplo/registro_demo.csv")), hoy)
+    ind = visual.indice_comunidades(df, pd.read_csv("datos/ejemplo/comunidades.csv"))
+    lams = panel_imagen.laminas(df, ind, registro.indicadores(df), hoy, "Cliente")
+    assert len(lams) == 7
+    assert Image.open(_io.BytesIO(lams[0][1])).size == (3840, 2160)
+    assert panel_imagen.pptx_laminas(lams[:1])[:2] == b"PK"

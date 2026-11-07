@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import actores, ia, presentacion, registro, visual
+from compromisos import actores, ia, panel_imagen, presentacion, registro, visual
 from compromisos.modelos import ExtraccionReunion
 
 RAIZ = Path(__file__).parent
@@ -186,6 +186,14 @@ k_total = registro.indicadores(base_df)
 def pptx_cache(df, A, R, H, corte, cliente) -> bytes:
     ind_all = visual.indice_comunidades(df, COMUNIDADES)
     return presentacion.generar(df, ind_all, registro.indicadores(df), A, R, H, corte, cliente)
+
+
+@st.cache_data(show_spinner=False, max_entries=20)
+def laminas_cache(df, corte, cliente, filtros) -> tuple[bytes, bytes]:
+    """Laminas 4K del panel (una por grafico): devuelve (pptx, zip de PNG)."""
+    ind_f = visual.indice_comunidades(df, COMUNIDADES)
+    lams = panel_imagen.laminas(df, ind_f, registro.indicadores(df), corte, cliente, filtros)
+    return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
 with st.sidebar:
@@ -392,6 +400,25 @@ with tab_tablero:
 
     k = registro.indicadores(df)
     tasa = k["tasa_cumplimiento"]
+    filtros_txt = " · ".join(
+        [", ".join(c.replace("C.C. ", "") for c in comunidades_f)] * bool(comunidades_f)
+        + [f"Responsable: {', '.join(partes)}"] * bool(partes) + [f"Tema: {', '.join(temas)}"] * bool(temas))
+    with st.popover("📥 Llevar este panel a una presentación", width="stretch"):
+        st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: "
+                    "resumen, mapa territorial, semáforo, estado, quién incumple, temas y brecha. "
+                    "Respetan los filtros que tengas activos.")
+        clave_lam = (filtros_txt, hoy, cliente, len(df), int(df["cumplido"].sum()))
+        if st.button("Preparar láminas", type="primary", disabled=df.empty):
+            with st.spinner("Dibujando las láminas en alta resolución…"):
+                st.session_state.laminas = (clave_lam, laminas_cache(df, hoy, cliente, filtros_txt))
+        lam = st.session_state.get("laminas")
+        if lam and lam[0] == clave_lam:  # solo si corresponden a los filtros actuales
+            p1, p2 = st.columns(2)
+            p1.download_button("⬇️ PowerPoint (.pptx)", lam[1][0], width="stretch",
+                               file_name=f"confluentia_panel_{hoy:%Y%m%d}.pptx",
+                               mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+            p2.download_button("⬇️ Imágenes PNG (.zip)", lam[1][1], width="stretch",
+                               file_name=f"confluentia_panel_{hoy:%Y%m%d}.zip", mime="application/zip")
     ind = visual.indice_comunidades(df, COMUNIDADES) if not df.empty else pd.DataFrame()
     criticas = int((ind["semaforo"] == "Crítico").sum()) if not ind.empty else 0
     st.markdown('<div class="kpis">' + "".join([
