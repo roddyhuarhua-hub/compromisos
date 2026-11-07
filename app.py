@@ -1047,19 +1047,20 @@ with tab_riesgos:
             res_es = [(n, riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy,
                                           dict(zip(g["nombre"], g["postura_nueva"])))["puntos"])
                       for n, g in ((n, es_p[es_p["escenario"] == n]) for n in nombres_es)]
-            s1, s2 = st.columns([1, 1.1])
-            with s1:
+            with st.container():  # escenarios guardados, a todo el ancho
                 if res_es:
                     st.markdown("##### Riesgo de cada escenario")
                     st.plotly_chart(riesgos.figura_escenarios(res_es, r0["puntos"],
-                                                              alto=120 + 48 * len(res_es)),
+                                                              alto=110 + 58 * len(res_es)),
                                     width="stretch", config=cfg("escenarios"))
                 else:
-                    st.info("Este proceso aún no tiene escenarios. Arma uno a la derecha y guárdalo.")
-            with s2:
+                    st.info("Este proceso aún no tiene escenarios. Arma uno abajo y guárdalo.")
+            with st.container():  # armar escenario, a todo el ancho
                 st.markdown("##### Arma tu escenario")
-                elegidos = st.multiselect("Combina escenarios guardados", nombres_es, key=f"rg_esc_{pid}",
-                                          default=nombres_es[:1], placeholder="Ninguno")
+                st.caption("Elige uno o más escenarios guardados y ajusta, si quieres, la postura esperada de cada "
+                           "actor en la última columna.")
+                elegidos = st.pills("Combina escenarios guardados", nombres_es, selection_mode="multi",
+                                    key=f"rg_esc_{pid}", default=nombres_es[:1]) or []
                 cambios = {}
                 for n in elegidos:
                     g = es_p[es_p["escenario"] == n]
@@ -1069,10 +1070,14 @@ with tab_riesgos:
                 tabla["en_escenario"] = [postura_opc(cambios.get(n, p)) for n, p in
                                          zip(p0["nombre"], p0["postura_antes"])]
                 ed = st.data_editor(tabla, hide_index=True, width="stretch", key=f"rg_ed_{pid}_{'|'.join(elegidos)}",
-                                    disabled=["nombre", "rol", "postura_antes"], height=260,
-                                    column_config={"nombre": "Actor", "rol": "Rol", "postura_antes": "Hoy",
+                                    disabled=["nombre", "rol", "postura_antes"], height=38 + 35 * len(tabla),
+                                    column_config={"nombre": st.column_config.TextColumn("Actor", width="large"),
+                                                   "rol": st.column_config.TextColumn("Rol", width="small"),
+                                                   "postura_antes": st.column_config.TextColumn("Postura hoy",
+                                                                                                width="small"),
                                                    "en_escenario": st.column_config.SelectboxColumn(
-                                                       "En el escenario", options=POSTURA_OPC, required=True)})
+                                                       "✏️ Postura en el escenario", options=POSTURA_OPC,
+                                                       required=True, width="medium")})
             manual = {n: POSTURA_OPC.index(v) - 2 for n, v in zip(ed["nombre"], ed["en_escenario"])}
             cambios = {n: v for n, v in manual.items()
                        if v != int(p0.loc[p0["nombre"] == n, "postura_antes"].iloc[0])}

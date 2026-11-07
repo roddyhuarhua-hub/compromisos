@@ -7,6 +7,7 @@ explica con un dato que se puede revisar.
 """
 from __future__ import annotations
 
+import textwrap
 from datetime import date
 
 import networkx as nx
@@ -311,7 +312,7 @@ def figura_escenarios(resultados: list[tuple[str, int]], base: int, alto: int = 
     """Riesgo de cada escenario frente a la situacion actual."""
     nombres = ["Situación actual"] + [n for n, _ in resultados]
     valores = [base] + [v for _, v in resultados]
-    corto = [n if len(n) <= 48 else n[:46] + "…" for n in nombres]
+    corto = ["<br>".join(textwrap.wrap(n, 60)) for n in nombres]
     fig = go.Figure(go.Bar(y=corto[::-1], x=valores[::-1], orientation="h",
                            marker_color=[NIVEL_COLOR[nivel(v)] for v in valores[::-1]],
                            marker_line=dict(color=[TINTA if i == len(valores) - 1 else "white"
