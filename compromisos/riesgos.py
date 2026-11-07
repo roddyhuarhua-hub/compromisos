@@ -339,9 +339,6 @@ def figura_cartera(c: pd.DataFrame, alto: int = 300) -> go.Figure:
                     text=c["id"], textfont=dict(color="white", size=12), customdata=c[["proceso", "dias_plazo"]],
                     hovertemplate="<b>%{customdata[0]}</b><br>Riesgo %{x}/100 · impacto %{y}/5<br>"
                                   "Faltan %{customdata[1]} días<extra></extra>", showlegend=False)
-    fig.add_scatter(x=c["riesgo"], y=c["impacto"] - 0.38, mode="text", hoverinfo="skip", showlegend=False,
-                    text=[p if len(p) <= 28 else p[:26] + "…" for p in c["proceso"]],
-                    textfont=dict(size=11, color=TINTA))
     for x in (35, 60):
         fig.add_vline(x=x, line=dict(color=BORDE, dash="dot"))
     fig.update_xaxes(range=[-12, 112], tickvals=[0, 20, 40, 60, 80, 100], title="Riesgo de paralización",

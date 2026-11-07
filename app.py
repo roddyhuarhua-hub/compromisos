@@ -947,7 +947,7 @@ with tab_riesgos:
             kpi("🔴 Riesgo alto", f"{(cart['nivel'] == 'Alto').sum()}", "pueden paralizarse", "#d03b3b"),
             kpi("🟡 Riesgo medio", f"{(cart['nivel'] == 'Medio').sum()}", "requieren atención", "#eda100"),
             kpi("📅 Próximo hito", f"{int(prox.iloc[0]['dias_plazo'])} días" if not prox.empty else "–",
-                prox.iloc[0]["proceso"][:38] if not prox.empty else "", "#1c5cab"),
+                __import__("textwrap").shorten(prox.iloc[0]["proceso"], 44, placeholder="…") if not prox.empty else "", "#1c5cab"),
             kpi("📋 Acciones pendientes", f"{len(pend)}",
                 f"{int((pend['fecha'].notna() & (pend['fecha'] < hoy)).sum())} atrasadas", "#5b6675"),
         ]) + "</div>", unsafe_allow_html=True)
@@ -958,17 +958,25 @@ with tab_riesgos:
             st.plotly_chart(riesgos.figura_cartera(cart, alto=330), width="stretch",
                             config=cfg("cartera_procesos"))
         with c2:
-            st.markdown("##### Prioridad (riesgo × impacto)")
-            vista = cart.assign(semaforo=cart["nivel"].map({"Alto": "🔴", "Medio": "🟡", "Bajo": "🟢"}))
-            st.dataframe(vista[["semaforo", "id", "proceso", "riesgo", "impacto", "dias_plazo"]],
-                         hide_index=True, width="stretch",
-                         column_config={"semaforo": st.column_config.TextColumn("", width=30),
-                                        "id": st.column_config.TextColumn("", width=40),
-                                        "proceso": st.column_config.TextColumn("Proceso", width="medium"),
-                                        "riesgo": st.column_config.ProgressColumn("Riesgo", min_value=0, max_value=100,
-                                                                                  format="%d", width="small"),
-                                        "impacto": st.column_config.NumberColumn("Impacto", format="%d/5"),
-                                        "dias_plazo": st.column_config.NumberColumn("Faltan", format="%d días")})
+            st.markdown("##### Prioridad (riesgo × impacto), de mayor a menor")
+            filas_p = []
+            for _, c_ in cart.iterrows():
+                col_ = riesgos.NIVEL_COLOR[c_["nivel"]]
+                falta = (f"faltan {int(c_['dias_plazo'])} días" if pd.notna(c_["dias_plazo"]) and c_["dias_plazo"] >= 0
+                         else "plazo vencido" if pd.notna(c_["dias_plazo"]) else "sin plazo")
+                filas_p.append(f"""
+<div class="evento" style="border-left:6px solid {col_};padding:10px 14px">
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline">
+    <div style="font-weight:700;font-size:14.5px">{c_['id']} · {c_['proceso']}</div>
+    <div style="font-weight:700;font-size:20px;color:{col_};white-space:nowrap">{c_['riesgo']}<span
+      style="font-size:12px;color:#5b6675;font-weight:500">/100</span></div>
+  </div>
+  <div style="height:6px;border-radius:4px;background:rgba(31,42,55,0.08);margin:6px 0">
+    <div style="height:6px;border-radius:4px;width:{c_['riesgo']}%;background:{col_}"></div></div>
+  <div style="font-size:12.5px;color:#5b6675">{c_['comunidad'].replace('C.C. ', '')} · riesgo {c_['nivel'].lower()} ·
+  impacto {c_['impacto']}/5 · {falta}</div>
+</div>""")
+            st.markdown("".join(filas_p), unsafe_allow_html=True)
 
         st.divider()
         nombres_p = dict(zip(cart["id"], cart["proceso"]))
