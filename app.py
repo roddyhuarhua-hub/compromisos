@@ -1057,10 +1057,10 @@ with tab_riesgos:
                     st.info("Este proceso aún no tiene escenarios. Arma uno abajo y guárdalo.")
             with st.container():  # armar escenario, a todo el ancho
                 st.markdown("##### Arma tu escenario")
-                st.caption("Elige uno o más escenarios guardados y ajusta, si quieres, la postura esperada de cada "
-                           "actor en la última columna.")
-                elegidos = st.pills("Combina escenarios guardados", nombres_es, selection_mode="multi",
-                                    key=f"rg_esc_{pid}", default=nombres_es[:1]) or []
+                st.caption("Despliega la lista y elige uno o más escenarios guardados; luego ajusta, si quieres, la "
+                           "postura esperada de cada actor en la última columna.")
+                elegidos = st.multiselect("Elige uno o más escenarios guardados", nombres_es, key=f"rg_esc_{pid}",
+                                          default=nombres_es[:1], placeholder="Despliega la lista para elegir")
                 cambios = {}
                 for n in elegidos:
                     g = es_p[es_p["escenario"] == n]
