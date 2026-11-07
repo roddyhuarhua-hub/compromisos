@@ -1116,33 +1116,77 @@ with tab_riesgos:
             ac_p = AC_r[AC_r["proceso_id"] == pid]
             hechas = int((ac_p["estado"] == "Hecha").sum())
             sin_plan = p0[(p0["presion"] > 0) & ~p0["nombre"].isin(ac_p["nombre"])]
-            st.caption(f"{hechas} de {len(ac_p)} acciones hechas." + (
-                f" ⚠️ {len(sin_plan)} actores en contra sin acción asignada: {', '.join(sin_plan['nombre'])}."
-                if len(sin_plan) else " Todos los actores en contra tienen al menos una acción."))
-            ac_ed = st.data_editor(ac_p.drop(columns=["proceso_id"]).reset_index(drop=True), num_rows="dynamic", hide_index=True,
-                                   width="stretch", key=f"rg_acc_{pid}_{len(ac_p)}",
-                                   column_config={
-                                       "nombre": st.column_config.SelectboxColumn("Actor", options=list(p0["nombre"])),
-                                       "estrategia": st.column_config.SelectboxColumn("Estrategia",
-                                                                                      options=riesgos.ESTRATEGIAS),
-                                       "accion": st.column_config.TextColumn("Acción", width="large"),
-                                       "responsable": "Responsable",
-                                       "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-                                       "estado": st.column_config.SelectboxColumn("Estado",
-                                                                                  options=riesgos.ESTADOS_ACCION)})
-            b1, b2, b3 = st.columns(3)
-            if b1.button("💾 Guardar el plan", type="primary", key=f"rg_acc_guardar_{pid}"):
-                st.session_state.acciones = riesgos.normalizar_acciones(pd.concat(
-                    [AC_r[AC_r["proceso_id"] != pid], ac_ed.assign(proceso_id=pid)], ignore_index=True))
-                st.toast("✅ Plan de acción guardado.")
-                st.rerun()
-            if b2.button("✨ Sugerir acciones para quienes no tienen", disabled=sin_plan.empty and
-                         p0[~p0["nombre"].isin(ac_p["nombre"])].empty, key=f"rg_sug_{pid}"):
-                sug = riesgos.sugerir_acciones(pid, p0, AC_r, pr["responsable"])
-                st.session_state.acciones = riesgos.normalizar_acciones(pd.concat([AC_r, sug], ignore_index=True))
-                st.rerun()
-            b3.download_button("⬇️ Plan de acción (CSV)", AC_r.to_csv(index=False).encode("utf-8"),
-                               "plan_de_accion.csv", "text/csv", key="rg_acc_csv")
+            atrasadas = ac_p[(ac_p["estado"] != "Hecha") & ac_p["fecha"].notna() & (ac_p["fecha"] < hoy)]
+            avance = hechas / len(ac_p) if len(ac_p) else 0
+            st.markdown(f"""
+<div class="evento" style="padding:12px 16px">
+  <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:baseline">
+    <div><span style="font-size:26px;font-weight:700">{hechas}/{len(ac_p)}</span>
+      <span style="color:#5b6675"> acciones hechas</span></div>
+    <div><span style="font-size:26px;font-weight:700;color:#d03b3b">{len(atrasadas)}</span>
+      <span style="color:#5b6675"> atrasadas</span></div>
+    <div><span style="font-size:26px;font-weight:700;color:{'#d03b3b' if len(sin_plan) else '#1baf7a'}">{len(sin_plan)}</span>
+      <span style="color:#5b6675"> actores en contra sin acción</span></div>
+  </div>
+  <div style="height:8px;border-radius:4px;background:rgba(31,42,55,0.08);margin-top:8px">
+    <div style="height:8px;border-radius:4px;width:{avance:.0%};background:#1baf7a"></div></div>
+</div>""", unsafe_allow_html=True)
+            if len(sin_plan):
+                st.warning("**Sin acción asignada:** " + ", ".join(
+                    f"{n} ({actores.POSTURA_TXT[int(v)].lower()})" for n, v in zip(sin_plan["nombre"], sin_plan["postura"]))
+                    + ". Abre *Editar el plan* y usa **✨ Sugerir acciones** para proponer una por actor.")
+            post_de = dict(zip(p0["nombre"], p0["postura"]))
+            COL_EST = {"Pendiente": ("⏳ Pendientes", "#5b6675"), "En curso": ("🔄 En curso", "#eda100"),
+                       "Hecha": ("✅ Hechas", "#1baf7a")}
+            for col_k, est in zip(st.columns(3), riesgos.ESTADOS_ACCION):
+                titulo_k, color_k = COL_EST[est]
+                grupo = ac_p[ac_p["estado"] == est].sort_values("fecha", na_position="last")
+                col_k.markdown(f"<div style='font-weight:700;color:{color_k};border-bottom:3px solid {color_k};"
+                               f"padding-bottom:4px;margin-bottom:8px'>{titulo_k} ({len(grupo)})</div>",
+                               unsafe_allow_html=True)
+                tarjetas = []
+                for _, a in grupo.iterrows():
+                    tarde = est != "Hecha" and pd.notna(a["fecha"]) and a["fecha"] < hoy
+                    fecha_t = (f"{a['fecha']:%d/%m/%Y}" if pd.notna(a["fecha"]) else "sin fecha")
+                    fecha_t = (f"<b style='color:#d03b3b'>⚠️ {fecha_t} (atrasada)</b>" if tarde else
+                               f"📅 {fecha_t}" + (f" · en {(a['fecha'] - hoy).days} días"
+                                                 if pd.notna(a["fecha"]) and est != "Hecha" else ""))
+                    color_a = actores.POSTURA_COLOR.get(int(post_de.get(a["nombre"], 0)), "#a3a3a0")
+                    tarjetas.append(f"""
+<div class="evento" style="border-left:5px solid {color_a};padding:10px 12px;{'opacity:0.75;' if est == 'Hecha' else ''}">
+  <div style="font-weight:700">{a['nombre'] or 'Sin actor'}</div>
+  <div style="margin:3px 0 6px 0">{a['accion']}</div>
+  <span class="badge" style="background:rgba(45,74,51,0.1);color:#2d4a33">{a['estrategia'] or '—'}</span>
+  <div style="font-size:12.5px;color:#5b6675;margin-top:6px">👤 {a['responsable'] or '—'} · {fecha_t}</div>
+</div>""")
+                col_k.markdown("".join(tarjetas) or "<div style='color:#5b6675;font-size:13px'>Ninguna</div>",
+                               unsafe_allow_html=True)
+            st.caption("Color del borde = postura del actor hacia la empresa.")
+            with st.expander("✏️ Editar el plan (agregar, cambiar estado o fecha)"):
+                ac_ed = st.data_editor(ac_p.drop(columns=["proceso_id"]).reset_index(drop=True), num_rows="dynamic", hide_index=True,
+                                       width="stretch", key=f"rg_acc_{pid}_{len(ac_p)}",
+                                       column_config={
+                                           "nombre": st.column_config.SelectboxColumn("Actor", options=list(p0["nombre"])),
+                                           "estrategia": st.column_config.SelectboxColumn("Estrategia",
+                                                                                          options=riesgos.ESTRATEGIAS),
+                                           "accion": st.column_config.TextColumn("Acción", width="large"),
+                                           "responsable": "Responsable",
+                                           "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                                           "estado": st.column_config.SelectboxColumn("Estado",
+                                                                                      options=riesgos.ESTADOS_ACCION)})
+                b1, b2, b3 = st.columns(3)
+                if b1.button("💾 Guardar el plan", type="primary", key=f"rg_acc_guardar_{pid}"):
+                    st.session_state.acciones = riesgos.normalizar_acciones(pd.concat(
+                        [AC_r[AC_r["proceso_id"] != pid], ac_ed.assign(proceso_id=pid)], ignore_index=True))
+                    st.toast("✅ Plan de acción guardado.")
+                    st.rerun()
+                if b2.button("✨ Sugerir acciones para quienes no tienen", disabled=sin_plan.empty and
+                             p0[~p0["nombre"].isin(ac_p["nombre"])].empty, key=f"rg_sug_{pid}"):
+                    sug = riesgos.sugerir_acciones(pid, p0, AC_r, pr["responsable"])
+                    st.session_state.acciones = riesgos.normalizar_acciones(pd.concat([AC_r, sug], ignore_index=True))
+                    st.rerun()
+                b3.download_button("⬇️ Plan de acción (CSV)", AC_r.to_csv(index=False).encode("utf-8"),
+                                   "plan_de_accion.csv", "text/csv", key="rg_acc_csv")
 
             with st.popover("📥 Bajar el análisis de este proceso para una presentación", width="stretch"):
                 st.markdown("**4 láminas en 4K (3840 × 2160)**: riesgo del proceso y por qué, quién puede frenarlo, "
