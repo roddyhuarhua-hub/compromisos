@@ -24,14 +24,13 @@ except ImportError:
     pass
 
 from compromisos import (actores, conflictos, ia, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
-                         presentacion, registro, riesgos, visual)
+                         portafolio, presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
 RAIZ = Path(__file__).parent
 EJEMPLO = RAIZ / "datos" / "ejemplo"
 
 COLOR_ESTADO, ICONO_ESTADO = visual.COLOR_ESTADO, visual.ICONO_ESTADO
-COMUNIDADES = pd.read_csv(EJEMPLO / "comunidades.csv")
 
 st.set_page_config(page_title="Compromisos · Confluentia", page_icon=str(RAIZ / "img" / "icono_confluentia.png"),
                    layout="wide")
@@ -150,21 +149,20 @@ def procesar(texto: str, fecha_r: date, contexto: str) -> None:
 
 
 # ---------------------------------------------------------------- estado de sesion
-if "registro" not in st.session_state:
-    st.session_state.registro = registro.cargar(EJEMPLO / "registro_demo.csv")
+CLAVES_DATOS = ["comunidades", "proyectos", "registro", "actores", "relaciones", "posturas", "conflictos", "procesos",
+                "partes", "escenarios", "acciones"]
+
+
+@st.cache_data(show_spinner=False)
+def demo() -> dict:
+    return portafolio.cargar_demo(EJEMPLO)
+
+
+if "comunidades" not in st.session_state:  # la demo: una unidad minera y dos proyectos de exploracion
+    for k_, v_ in demo().items():
+        st.session_state[k_] = v_.copy()
 if "extraccion" not in st.session_state:
     st.session_state.extraccion = None
-if "actores" not in st.session_state:
-    st.session_state.actores = actores.normalizar_actores(pd.read_csv(EJEMPLO / "actores_demo.csv"))
-    st.session_state.relaciones = actores.normalizar_relaciones(pd.read_csv(EJEMPLO / "relaciones_demo.csv"))
-    st.session_state.posturas = actores.normalizar_historial(pd.read_csv(EJEMPLO / "posturas_demo.csv"))
-if "conflictos" not in st.session_state:
-    st.session_state.conflictos = conflictos.normalizar(pd.read_csv(EJEMPLO / "conflictos_demo.csv"))
-if "procesos" not in st.session_state:
-    st.session_state.procesos = riesgos.normalizar_procesos(pd.read_csv(EJEMPLO / "procesos_demo.csv"))
-    st.session_state.partes = riesgos.normalizar_partes(pd.read_csv(EJEMPLO / "proceso_actores_demo.csv"))
-    st.session_state.escenarios = riesgos.normalizar_escenarios(pd.read_csv(EJEMPLO / "escenarios_demo.csv"))
-    st.session_state.acciones = riesgos.normalizar_acciones(pd.read_csv(EJEMPLO / "acciones_demo.csv"))
 
 # ---------------------------------------------------------------- barra lateral
 with st.sidebar:
@@ -176,6 +174,13 @@ with st.sidebar:
         st.success(f"IA conectada: {ia.descripcion_proveedor()}")
     else:
         st.warning("Sin clave de IA: puedes usar la reunión de ejemplo.")
+    PROYECTOS = portafolio.lista(st.session_state.comunidades)
+    PROY = st.selectbox("🗂️ Proyecto", [portafolio.TODOS] + PROYECTOS, key="proyecto",
+                        help="Elige un proyecto para ver solo sus comunidades, actores, conflictos y procesos. "
+                             "Con «Todos» ves la mirada corporativa en la pestaña Portafolio.")
+    if st.session_state.get("_proy_previo") != PROY:  # la presentacion general depende del proyecto
+        st.session_state.pop("pptx", None)
+        st.session_state["_proy_previo"] = PROY
     hoy = st.date_input("Fecha de corte", value=date.today(), format="DD/MM/YYYY")
     st.divider()
     st.markdown("**Registro**")
@@ -184,17 +189,20 @@ with st.sidebar:
         st.session_state.registro = registro.cargar(subido)
         st.rerun()
     if st.button("Volver al registro de ejemplo"):
-        st.session_state.registro = registro.cargar(EJEMPLO / "registro_demo.csv")
+        st.session_state.registro = demo()["registro"].copy()
         st.rerun()
     st.caption("Datos de ejemplo sintéticos: comunidades, empresa y ubicaciones ficticias.")
 
-base_df = registro.con_estado(st.session_state.registro, hoy)
+DATOS = {k_: st.session_state[k_] for k_ in CLAVES_DATOS}
+V = portafolio.filtrar(DATOS, PROY)  # vista del proyecto elegido (o de todos)
+COMUNIDADES = V["comunidades"]
+base_df = registro.con_estado(V["registro"], hoy)
 k_total = registro.indicadores(base_df)
 
 
 @st.cache_data(show_spinner=False, max_entries=20)
-def pptx_cache(df, A, R, H, corte, cliente) -> bytes:
-    ind_all = visual.indice_comunidades(df, COMUNIDADES)
+def pptx_cache(df, A, R, H, corte, cliente, coms) -> bytes:
+    ind_all = visual.indice_comunidades(df, coms)
     return presentacion.generar(df, ind_all, registro.indicadores(df), A, R, H, corte, cliente)
 
 
@@ -202,9 +210,9 @@ FONDO_LAMINA = {"🛰️ Satélite": "satelite", "⛰️ Relieve": "relieve"}
 
 
 @st.cache_data(show_spinner=False, max_entries=20)
-def laminas_cache(df, corte, cliente, filtros, fondo="satelite") -> tuple[bytes, bytes]:
+def laminas_cache(df, corte, cliente, filtros, fondo="satelite", coms=None) -> tuple[bytes, bytes]:
     """Laminas 4K del panel (una por grafico): devuelve (pptx, zip de PNG)."""
-    ind_f = visual.indice_comunidades(df, COMUNIDADES)
+    ind_f = visual.indice_comunidades(df, coms)
     lams = panel_imagen.laminas(df, ind_f, registro.indicadores(df), corte, cliente, filtros, fondo)
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
@@ -224,10 +232,10 @@ def laminas_riesgo_cache(pr, partes, A, R, H, conf, df, escenarios, acciones, co
 
 
 @st.cache_data(show_spinner=False, max_entries=20)
-def laminas_conf_cache(conf, df, corte, cliente, filtros, fondo="satelite") -> tuple[bytes, bytes]:
+def laminas_conf_cache(conf, df, corte, cliente, filtros, fondo="satelite", coms=None) -> tuple[bytes, bytes]:
     """Laminas 4K de conflictividad: devuelve (pptx, zip de PNG)."""
-    ind_c = visual.indice_comunidades(df, COMUNIDADES)
-    lams = laminas_conflictos.laminas_conflictos(conf, ind_c, COMUNIDADES, corte, cliente, filtros, fondo)
+    ind_c = visual.indice_comunidades(df, coms)
+    lams = laminas_conflictos.laminas_conflictos(conf, ind_c, coms, corte, cliente, filtros, fondo)
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
@@ -235,10 +243,11 @@ with st.sidebar:
     st.divider()
     st.markdown("**📥 Llévalo a tu presentación**")
     cliente = st.text_input("Cliente (para la portada)", "Minera Andina S.A.C. (ejemplo)")
+    cliente_lam = cliente + (f" · {PROY}" if PROY != portafolio.TODOS else "")  # pie de las laminas
     if st.button("Preparar presentación (.pptx)", width="stretch"):
         with st.spinner("Armando las diapositivas…"):
-            st.session_state.pptx = pptx_cache(base_df, st.session_state.actores, st.session_state.relaciones,
-                                               st.session_state.posturas, hoy, cliente)
+            st.session_state.pptx = pptx_cache(base_df, V["actores"], V["relaciones"], V["posturas"], hoy,
+                                               cliente, COMUNIDADES)
     if st.session_state.get("pptx"):
         st.download_button("⬇️ Descargar presentación", st.session_state.pptx, type="primary", width="stretch",
                            file_name=f"confluentia_reporte_{hoy:%Y%m%d}.pptx",
@@ -257,17 +266,89 @@ st.markdown(f"""
     <span class="chip">📍 {base_df['comunidad'].nunique()} comunidades</span>
     <span class="chip">🗓️ {base_df['reunion'].nunique()} reuniones</span>
     <span class="chip">📌 {k_total['total']} compromisos</span>
-    <span class="chip">🕸️ {len(st.session_state.actores)} actores mapeados</span>
+    <span class="chip">🗂️ {PROY.replace('🌐 ', '') if PROY == portafolio.TODOS else PROY}</span>
+    <span class="chip">🕸️ {len(V['actores'])} actores mapeados</span>
     <span class="chip">🎙️ Whisper + Gemini</span>
     <span class="chip">Corte: {hoy:%d/%m/%Y}</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-tab_tablero, tab_actores, tab_conflictos, tab_riesgos, tab_reunion, tab_registro = st.tabs(
-    ["📊 Panel ejecutivo", "🕸️ Mapa de actores", "🔥 Conflictividad", "🎯 Riesgos y decisiones", "🎙️ Nueva reunión",
+tab_portafolio, tab_tablero, tab_actores, tab_conflictos, tab_riesgos, tab_reunion, tab_registro = st.tabs(
+    ["🗂️ Portafolio", "📊 Panel ejecutivo", "🕸️ Mapa de actores", "🔥 Conflictividad", "🎯 Riesgos y decisiones", "🎙️ Nueva reunión",
      "📋 Registro y descargas"]
 )
+
+# ---------------------------------------------------------------- 0. portafolio
+with tab_portafolio:
+    st.markdown("La **mirada corporativa**: todos los proyectos de la empresa o de la consultora en una sola "
+                "pantalla, aunque sus comunidades y actores no tengan relación entre sí (una unidad minera, frentes "
+                "de exploración en otras regiones o clientes distintos). Para trabajar un proyecto en detalle, "
+                "elígelo en **🗂️ Proyecto**, en la barra lateral: todas las pestañas se filtran.")
+    res = portafolio.resumen(DATOS, hoy)
+    trans = portafolio.transversales(actores.al_corte(DATOS["actores"], DATOS["posturas"], hoy),
+                                     DATOS["relaciones"], DATOS["comunidades"])
+    if res.empty:
+        st.info("Aún no hay proyectos. Agrega la columna «proyecto» a tus comunidades.")
+    else:
+        st.markdown('<div class="kpis">' + "".join([
+            kpi("Proyectos", f"{len(res)}", " · ".join(f"{(res['tipo'] == t).sum()} {t.lower()}"
+                                                       for t in res["tipo"].unique() if t), "#2d4a33"),
+            kpi("📍 Comunidades", f"{int(res['comunidades'].sum())}",
+                f"{int(res['criticas'].sum())} en estado crítico", "#a32424"),
+            kpi("🔴 Compromisos vencidos", f"{int(res['vencidos'].sum())}",
+                f"de {int(res['compromisos'].sum())} registrados", COLOR_ESTADO["Vencido"]),
+            kpi("🎯 Procesos en riesgo alto", f"{int(res['riesgo_alto'].sum())}",
+                f"de {int(res['procesos'].sum())} en seguimiento", "#eda100"),
+            kpi("🔗 Actores transversales", f"{len(trans)}", "presentes en varios proyectos", "#6250d6"),
+        ]) + "</div>", unsafe_allow_html=True)
+
+        st.markdown("#### Cómo está cada proyecto")
+        NIVEL_ICONO = {"Alto": "🔴", "Medio": "🟡", "Bajo": "🟢"}
+        for fila in range(0, len(res), 3):
+            for col_p, (_, p_) in zip(st.columns(3), res.iloc[fila:fila + 3].iterrows()):
+                elegido = PROY == p_["proyecto"]
+                col_p.markdown(f"""
+<div class="evento" style="border-top:6px solid {p_['color']};{'box-shadow:0 0 0 2px ' + p_['color'] + ';' if elegido else ''}">
+<div style="font-size:16px;font-weight:700">{p_['proyecto']}</div>
+<div style="color:#5b6675;font-size:12.5px;margin-bottom:8px">{p_['tipo']} · {p_['fase']} · responsable: {p_['responsable'] or '—'}</div>
+<div style="font-size:14px;margin-bottom:6px">{NIVEL_ICONO.get(p_['nivel'], '⚪')} <b>Alerta {p_['nivel'].lower()}</b>
+<span style="color:#5b6675">({int(p_['alerta'])}/100)</span></div>
+<table style="width:100%;font-size:13px;border-collapse:collapse">
+<tr><td style="color:#5b6675;padding:2px 0">Comunidades</td><td style="text-align:right"><b>{p_['comunidades']}</b> ({p_['criticas']} críticas)</td></tr>
+<tr><td style="color:#5b6675;padding:2px 0">Compromisos vencidos</td><td style="text-align:right"><b>{p_['vencidos']}</b> de {p_['compromisos']}</td></tr>
+<tr><td style="color:#5b6675;padding:2px 0">Cumplimiento</td><td style="text-align:right"><b>{p_['cumplimiento']:.0%}</b></td></tr>
+<tr><td style="color:#5b6675;padding:2px 0">Días de paralización (3 años)</td><td style="text-align:right"><b>{p_['dias_paralizacion']}</b> ({p_['medidas_fuerza']} medidas)</td></tr>
+<tr><td style="color:#5b6675;padding:2px 0">Opositores con alta influencia</td><td style="text-align:right"><b>{p_['opositores_clave']}</b> de {p_['actores']} actores</td></tr>
+<tr><td style="color:#5b6675;padding:2px 0">Procesos en riesgo alto</td><td style="text-align:right"><b>{p_['riesgo_alto']}</b> de {p_['procesos']} (máx. {p_['riesgo_max']})</td></tr>
+</table>
+<div style="font-size:12.5px;margin-top:8px"><span style="color:#5b6675">Próximo hito:</span> {p_['proximo_hito']}</div>
+</div>""", unsafe_allow_html=True)
+        st.caption("Alerta del proyecto (0–100) = 40% el índice de riesgo de su comunidad más crítica + 30% el riesgo "
+                   "de su proceso más expuesto + 30% los días de paralización de los últimos 3 años.")
+
+        st.markdown("#### 🗺️ Todos los ámbitos en un mapa")
+        reg_all = registro.con_estado(DATOS["registro"], hoy)
+        ind_all = visual.indice_comunidades(reg_all, DATOS["comunidades"]) if not reg_all.empty else pd.DataFrame()
+        st.plotly_chart(portafolio.figura_mapa(res, DATOS["comunidades"], ind_all), width="stretch",
+                        config=cfg("mapa_portafolio", zoom=True))
+        st.plotly_chart(portafolio.figura_alerta(res), width="stretch", config=cfg("alerta_por_proyecto"))
+        st.plotly_chart(portafolio.figura_comparacion(res), width="stretch", config=cfg("compromisos_por_proyecto"))
+
+        st.markdown("#### 🔗 Actores transversales")
+        if trans.empty:
+            st.info("Ningún actor aparece en más de un proyecto.")
+        else:
+            st.markdown("Están presentes en **más de un proyecto**. Son los que pueden llevar un conflicto, una "
+                        "denuncia o una buena práctica de un ámbito a otro: conviene que un solo responsable "
+                        "coordine la relación con ellos.")
+            for col_t, (_, t_) in zip(st.columns(min(3, len(trans))), trans.head(3).iterrows()):
+                col_t.markdown(f"""
+<div class="evento" style="border-left:5px solid {actores.POSTURA_COLOR[int(t_['postura'])]}">
+<b>{t_['nombre']}</b> · {t_['tipo']}<br>
+<span style="color:#5b6675">{actores.POSTURA_TXT[int(t_['postura'])]} · influencia {t_['influencia']}/5</span><br>
+<span style="color:#5b6675">Presente en:</span> {', '.join(t_['proyectos'])}
+</div>""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------- 1. nueva reunion
 with tab_reunion:
@@ -444,10 +525,11 @@ with tab_tablero:
                     "resumen, mapa territorial, semáforo, estado, quién incumple, temas y brecha. "
                     "Respetan los filtros que tengas activos.")
         fondo_l = FONDO_LAMINA[st.radio("Fondo del mapa", list(FONDO_LAMINA), horizontal=True, key="fondo_lam")]
-        clave_lam = (filtros_txt, hoy, cliente, len(df), int(df["cumplido"].sum()), fondo_l)
+        clave_lam = (PROY, filtros_txt, hoy, cliente, len(df), int(df["cumplido"].sum()), fondo_l)
         if st.button("Preparar láminas", type="primary", disabled=df.empty):
             with st.spinner("Dibujando las láminas en alta resolución (descargando el mapa satelital)…"):
-                st.session_state.laminas = (clave_lam, laminas_cache(df, hoy, cliente, filtros_txt, fondo_l))
+                st.session_state.laminas = (clave_lam, laminas_cache(df, hoy, cliente_lam, filtros_txt, fondo_l,
+                                                                               COMUNIDADES))
         lam = st.session_state.get("laminas")
         if lam and lam[0] == clave_lam:  # solo si corresponden a los filtros actuales
             p1, p2 = st.columns(2)
@@ -533,7 +615,7 @@ with tab_tablero:
 
 # ---------------------------------------------------------------- 2b. mapa de actores
 with tab_actores:
-    A, R, H = st.session_state.actores, st.session_state.relaciones, st.session_state.posturas
+    A, R, H = V["actores"], V["relaciones"], V["posturas"]
     st.markdown("Cada reunión que procesa la IA alimenta este mapa: **quién es quién** en cada comunidad, "
                 "su postura hacia la empresa, su influencia y **cómo se relacionan** entre caseríos y comunidades. "
                 "Como las posturas cambian, cada reunión deja una *foto* fechada: mueve la línea de tiempo para "
@@ -566,11 +648,11 @@ with tab_actores:
         st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: resumen, "
                     "red de relaciones, actores clave, matriz poder–postura, balance por comunidad, cambios de "
                     "postura y trayectorias. Respetan la fecha del mapa y los filtros activos.")
-        clave_a = (filtros_a, cliente, len(A_f), len(R_f), int(A_f["postura"].sum()) if not A_f.empty else 0,
+        clave_a = (PROY, filtros_a, cliente, len(A_f), len(R_f), int(A_f["postura"].sum()) if not A_f.empty else 0,
                    len(H))
         if st.button("Preparar láminas", type="primary", disabled=A_f.empty, key="btn_lam_act"):
             with st.spinner("Dibujando las láminas en alta resolución…"):
-                st.session_state.laminas_act = (clave_a, laminas_act_cache(A_f, R_f, H, corte, cliente, filtros_a))
+                st.session_state.laminas_act = (clave_a, laminas_act_cache(A_f, R_f, H, corte, cliente_lam, filtros_a))
         la_ = st.session_state.get("laminas_act")
         if la_ and la_[0] == clave_a:
             q1, q2 = st.columns(2)
@@ -704,21 +786,23 @@ with tab_actores:
 
     with st.expander("📝 Editar y descargar el mapa de actores"):
         e1, e2 = st.columns(2)
-        A_ed = e1.data_editor(st.session_state.actores, num_rows="dynamic", hide_index=True, width="stretch", key="ed_actores")
-        R_ed = e2.data_editor(R, num_rows="dynamic", hide_index=True, width="stretch", key="ed_relaciones")
+        A_ed = e1.data_editor(V["actores"].reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_actores")
+        R_ed = e2.data_editor(R.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_relaciones")
         b1, b2, b3 = st.columns(3)
         if b1.button("Guardar cambios del mapa"):
-            st.session_state.actores = actores.normalizar_actores(A_ed)
-            st.session_state.relaciones = actores.normalizar_relaciones(R_ed)
+            st.session_state.actores = actores.normalizar_actores(
+                portafolio.reemplazar(st.session_state.actores, V["actores"], A_ed))
+            st.session_state.relaciones = actores.normalizar_relaciones(
+                portafolio.reemplazar(st.session_state.relaciones, V["relaciones"], R_ed))
             st.rerun()
-        b2.download_button("⬇️ Actores (CSV)", st.session_state.actores.to_csv(index=False).encode("utf-8"), "actores.csv", "text/csv")
+        b2.download_button("⬇️ Actores (CSV)", V["actores"].to_csv(index=False).encode("utf-8"), "actores.csv", "text/csv")
         b3.download_button("⬇️ Relaciones (CSV)", R.to_csv(index=False).encode("utf-8"), "relaciones.csv", "text/csv")
         st.download_button("⬇️ Historial de posturas (CSV)", H.to_csv(index=False).encode("utf-8"),
                            "historial_posturas.csv", "text/csv")
 
 # ---------------------------------------------------------------- 2c. conflictividad
 with tab_conflictos:
-    C = st.session_state.conflictos
+    C = V["conflictos"]
     st.markdown("La memoria del territorio: **paralizaciones, bloqueos de vías, tomas y otras manifestaciones** "
                 "contra la empresa, con el lugar exacto donde ocurrieron, quién convocó, qué exigían y cómo terminó. "
                 "Sirve para anticipar: los conflictos suelen repetirse en los mismos lugares y por las mismas demandas.")
@@ -756,12 +840,12 @@ with tab_conflictos:
                         "incumplimiento vs. conflicto. Respetan los filtros activos.")
             fondo_lc = FONDO_LAMINA[st.radio("Fondo del mapa", list(FONDO_LAMINA), horizontal=True,
                                              key="fondo_lam_conf")]
-            clave_c = (filtros_c, hoy, cliente, len(Cf), int(Cf["duracion_dias"].sum()) if not Cf.empty else 0,
+            clave_c = (PROY, filtros_c, hoy, cliente, len(Cf), int(Cf["duracion_dias"].sum()) if not Cf.empty else 0,
                        fondo_lc)
             if st.button("Preparar láminas", type="primary", disabled=Cf.empty, key="btn_lam_conf"):
                 with st.spinner("Dibujando las láminas en alta resolución (descargando el mapa satelital)…"):
-                    st.session_state.laminas_conf = (clave_c, laminas_conf_cache(Cf, base_df, hoy, cliente,
-                                                                                filtros_c, fondo_lc))
+                    st.session_state.laminas_conf = (clave_c, laminas_conf_cache(Cf, base_df, hoy, cliente_lam,
+                                                                                filtros_c, fondo_lc, COMUNIDADES))
             lc = st.session_state.get("laminas_conf")
             if lc and lc[0] == clave_c:
                 q1, q2 = st.columns(2)
@@ -901,11 +985,12 @@ with tab_conflictos:
                     st.rerun()
 
     with st.expander("📝 Editar, cargar o descargar el historial"):
-        C_ed = st.data_editor(C, num_rows="dynamic", hide_index=True, width="stretch", key="ed_conflictos",
+        C_ed = st.data_editor(C.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_conflictos",
                               column_config={"fecha": st.column_config.DateColumn(format="DD/MM/YYYY")})
         e1, e2, e3 = st.columns(3)
         if e1.button("Guardar cambios del historial"):
-            st.session_state.conflictos = conflictos.normalizar(C_ed)
+            st.session_state.conflictos = conflictos.normalizar(
+                portafolio.reemplazar(st.session_state.conflictos, V["conflictos"], C_ed))
             st.rerun()
         e2.download_button("⬇️ Historial (CSV)", C.to_csv(index=False).encode("utf-8"), "conflictos.csv", "text/csv")
         sub_c = e3.file_uploader("Cargar historial (CSV)", type=["csv"], key="csv_conflictos",
@@ -925,10 +1010,10 @@ def postura_opc(v: int) -> str:
 
 
 with tab_riesgos:
-    A_hoy = actores.al_corte(st.session_state.actores, st.session_state.posturas, hoy)
-    R_r, H_r, C_r = st.session_state.relaciones, st.session_state.posturas, st.session_state.conflictos
-    P_r, PA_r = st.session_state.procesos, st.session_state.partes
-    ES_r, AC_r = st.session_state.escenarios, st.session_state.acciones
+    A_hoy = actores.al_corte(V["actores"], V["posturas"], hoy)
+    R_r, H_r, C_r = V["relaciones"], V["posturas"], V["conflictos"]
+    P_r, PA_r = V["procesos"], V["partes"]
+    ES_r, AC_r = V["escenarios"], V["acciones"]
     st.markdown("Del diagnóstico a la decisión. Para cada **proceso clave** (una servidumbre, un contrato con una "
                 "empresa comunal, un monitoreo) la herramienta cruza lo que ya sabe del territorio: **quién está en "
                 "contra y cuánto pesa**, **qué conflictos hubo antes** en esa comunidad, **qué compromisos están "
@@ -1112,7 +1197,7 @@ with tab_riesgos:
                             nuevos = pd.DataFrame([dict(proceso_id=pid, escenario=nom_e, nombre=n, postura_nueva=v,
                                                         motivo="") for n, v in cambios.items()])
                             st.session_state.escenarios = riesgos.normalizar_escenarios(
-                                pd.concat([ES_r, nuevos], ignore_index=True))
+                                pd.concat([st.session_state.escenarios, nuevos], ignore_index=True))
                             st.rerun()
 
             # --- plan de accion
@@ -1180,14 +1265,16 @@ with tab_riesgos:
                                                                                       options=riesgos.ESTADOS_ACCION)})
                 b1, b2, b3 = st.columns(3)
                 if b1.button("💾 Guardar el plan", type="primary", key=f"rg_acc_guardar_{pid}"):
+                    todas = st.session_state.acciones
                     st.session_state.acciones = riesgos.normalizar_acciones(pd.concat(
-                        [AC_r[AC_r["proceso_id"] != pid], ac_ed.assign(proceso_id=pid)], ignore_index=True))
+                        [todas[todas["proceso_id"] != pid], ac_ed.assign(proceso_id=pid)], ignore_index=True))
                     st.toast("✅ Plan de acción guardado.")
                     st.rerun()
                 if b2.button("✨ Sugerir acciones para quienes no tienen", disabled=sin_plan.empty and
                              p0[~p0["nombre"].isin(ac_p["nombre"])].empty, key=f"rg_sug_{pid}"):
                     sug = riesgos.sugerir_acciones(pid, p0, AC_r, pr["responsable"])
-                    st.session_state.acciones = riesgos.normalizar_acciones(pd.concat([AC_r, sug], ignore_index=True))
+                    st.session_state.acciones = riesgos.normalizar_acciones(
+                        pd.concat([st.session_state.acciones, sug], ignore_index=True))
                     st.rerun()
                 b3.download_button("⬇️ Plan de acción (CSV)", AC_r.to_csv(index=False).encode("utf-8"),
                                    "plan_de_accion.csv", "text/csv", key="rg_acc_csv")
@@ -1195,12 +1282,12 @@ with tab_riesgos:
             with st.popover("📥 Bajar el análisis de este proceso para una presentación", width="stretch"):
                 st.markdown("**4 láminas en 4K (3840 × 2160)**: riesgo del proceso y por qué, quién puede frenarlo, "
                             "escenarios y plan de acción.")
-                clave_r = (pid, hoy, cliente, len(PA_r), len(ES_r), len(AC_r), int(A_hoy["postura"].sum()),
+                clave_r = (PROY, pid, hoy, cliente, len(PA_r), len(ES_r), len(AC_r), int(A_hoy["postura"].sum()),
                            r0["puntos"])
                 if st.button("Preparar láminas", type="primary", key="btn_lam_rg"):
                     with st.spinner("Dibujando las láminas en alta resolución…"):
                         st.session_state.laminas_rg = (clave_r, laminas_riesgo_cache(
-                            pr, PA_r, A_hoy, R_r, H_r, C_r, base_df, ES_r, AC_r, hoy, cliente))
+                            pr, PA_r, A_hoy, R_r, H_r, C_r, base_df, ES_r, AC_r, hoy, cliente_lam))
                 lr = st.session_state.get("laminas_rg")
                 if lr and lr[0] == clave_r:
                     q1, q2 = st.columns(2)
@@ -1212,20 +1299,22 @@ with tab_riesgos:
 
     with st.expander("📝 Editar procesos y actores de cada proceso"):
         st.markdown("**Procesos**")
-        P_ed = st.data_editor(P_r, num_rows="dynamic", hide_index=True, width="stretch", key="ed_procesos",
+        P_ed = st.data_editor(P_r.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_procesos",
                               column_config={"fecha_limite": st.column_config.DateColumn(format="DD/MM/YYYY"),
                                              "impacto": st.column_config.NumberColumn(min_value=1, max_value=5),
                                              "comunidad": st.column_config.SelectboxColumn(
                                                  options=list(COMUNIDADES["comunidad"]))})
         st.markdown("**Actores de cada proceso** (el nombre debe coincidir con el mapa de actores)")
-        PA_ed = st.data_editor(PA_r, num_rows="dynamic", hide_index=True, width="stretch", key="ed_partes",
+        PA_ed = st.data_editor(PA_r.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_partes",
                                column_config={"rol": st.column_config.SelectboxColumn(options=riesgos.ROLES),
                                               "nombre": st.column_config.SelectboxColumn(
                                                   options=sorted(st.session_state.actores["nombre"]))})
         f1, f2, f3 = st.columns(3)
         if f1.button("Guardar procesos y actores", type="primary"):
-            st.session_state.procesos = riesgos.normalizar_procesos(P_ed)
-            st.session_state.partes = riesgos.normalizar_partes(PA_ed)
+            st.session_state.procesos = riesgos.normalizar_procesos(
+                portafolio.reemplazar(st.session_state.procesos, P_r, P_ed))
+            st.session_state.partes = riesgos.normalizar_partes(
+                portafolio.reemplazar(st.session_state.partes, PA_r, PA_ed))
             st.rerun()
         f2.download_button("⬇️ Procesos (CSV)", P_r.to_csv(index=False).encode("utf-8"), "procesos.csv", "text/csv")
         f3.download_button("⬇️ Actores por proceso (CSV)", PA_r.to_csv(index=False).encode("utf-8"),
@@ -1236,7 +1325,7 @@ with tab_riesgos:
 
 # ---------------------------------------------------------------- 3. registro
 with tab_registro:
-    df = registro.con_estado(st.session_state.registro, hoy)
+    df = base_df
     st.markdown("Marca **Cumplido** cuando haya evidencia (acta de entrega, fotos, informe).")
     editado = st.data_editor(
         df.drop(columns=["estado", "dias_restantes"]),
@@ -1251,12 +1340,13 @@ with tab_registro:
         },
     )
     if st.button("Guardar cambios"):
-        st.session_state.registro = registro.normalizar(editado)
+        st.session_state.registro = registro.normalizar(
+            portafolio.reemplazar(st.session_state.registro, V["registro"], editado))
         st.rerun()
 
-    csv = registro.con_estado(st.session_state.registro, hoy).to_csv(index=False).encode("utf-8")
+    csv = base_df.to_csv(index=False).encode("utf-8")
     xlsx = io.BytesIO()
-    registro.con_estado(st.session_state.registro, hoy).to_excel(xlsx, index=False)
+    base_df.to_excel(xlsx, index=False)
     d1, d2 = st.columns(2)
     d1.download_button("⬇️ Descargar CSV", csv, "registro_compromisos.csv", "text/csv")
     d2.download_button("⬇️ Descargar Excel", xlsx.getvalue(), "registro_compromisos.xlsx")
