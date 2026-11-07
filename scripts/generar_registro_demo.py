@@ -56,7 +56,7 @@ PLANTILLAS = [
 ]
 
 comunidades = pd.DataFrame(COMUNIDADES, columns=["comunidad", "distrito", "lat", "lon", "familias", "_base"])
-comunidades.drop(columns="_base").assign(region="Apurímac").to_csv(SALIDA / "comunidades.csv", index=False)
+comunidades.drop(columns="_base").assign(region="Apurímac", proyecto="Unidad Minera Andina (Apurímac)").to_csv(SALIDA / "comunidades.csv", index=False)
 
 filas = []
 inicio = date(2025, 1, 15)

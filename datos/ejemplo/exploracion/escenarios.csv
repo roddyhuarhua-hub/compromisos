@@ -1,0 +1,9 @@
+proceso_id,escenario,nombre,postura_nueva,motivo
+Q1,Pagar lo pendiente antes de la asamblea,Hipólito Ayala,0,Se retira la principal bandera
+Q1,Pagar lo pendiente antes de la asamblea,Marcelina Huarcaya,0,Ve voluntad de cumplir
+Q1,Reubicar 2 plataformas fuera de la zona de pastoreo,Marcelina Huarcaya,1,Se atiende su preocupación
+A1,Monitoreo con veedores y laboratorio elegido por la comunidad,Nélida Vásquez,0,Confía en los resultados
+A1,Monitoreo con veedores y laboratorio elegido por la comunidad,Segundo Chilón,-1,Baja la tensión
+A1,Taller de la DIA sin acuerdo previo con las rondas,Central de Rondas de Bambamarca,-2,Convocan a paro
+A1,Taller de la DIA sin acuerdo previo con las rondas,Alcalde de Bambamarca,-2,Se suma al rechazo
+A2,Ponerse al día con los compromisos de empleo,Wilmer Tantaleán,0,Se cumple lo acordado

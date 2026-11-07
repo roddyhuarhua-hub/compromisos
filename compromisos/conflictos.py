@@ -15,7 +15,7 @@ import plotly.graph_objects as go
 
 from .actores import clave
 from .modelos import ExtraccionEventos
-from .visual import FONDOS, SEMAFORO, TINTA, TINTA_2, base
+from .visual import FONDOS, SEMAFORO, TINTA, TINTA_2, base, encuadre
 
 COLUMNAS = ["fecha", "tipo", "titulo", "lugar", "comunidad", "lat", "lon", "convocantes", "demanda", "tema",
             "duracion_dias", "participantes", "intensidad", "hubo_violencia", "desenlace", "fuente"]
@@ -117,11 +117,11 @@ def mapa(df: pd.DataFrame, comunidades: pd.DataFrame, fondo: str = "🛰️ Sat�
                            "<br>Duración: %{customdata[5]} días · Violencia: %{customdata[7]}"
                            "<br>Desenlace: %{customdata[6]}<extra></extra>")))
     ref = c if not c.empty else d
-    centro = dict(lat=float(ref["lat"].mean()), lon=float(ref["lon"].mean())) if not ref.empty \
-        else dict(lat=-14.15, lon=-72.8)
+    centro, zoom = encuadre(ref["lat"], ref["lon"], alto_px=alto) if not ref.empty \
+        else (dict(lat=-14.15, lon=-72.8), 8.6)
     fig.update_layout(
         map=dict(style=os.getenv("ESTILO_MAPA") or ("carto-positron" if not capas else "white-bg"),
-                 center=centro, zoom=8.6,
+                 center=centro, zoom=zoom,
                  layers=[dict(sourcetype="raster", source=[u], below="traces", sourceattribution=atribucion)
                          for u in capas]),
         height=alto, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)",

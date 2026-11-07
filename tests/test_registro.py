@@ -278,3 +278,26 @@ def test_laminas_riesgos_4k(monkeypatch):
     assert [n for n, _ in lams][:2] == ["01_riesgo_del_proceso.png", "02_quien_puede_frenar.png"]
     assert len(lams) == 4
     assert Image.open(__import__("io").BytesIO(lams[0][1])).size == (3840, 2160)
+
+
+def test_portafolio_varios_proyectos():
+    from compromisos import portafolio as pf
+    d = pf.cargar_demo(EJEMPLO)
+    proyectos = pf.lista(d["comunidades"])
+    assert len(proyectos) == 3 and "Exploración Cerro Azul (Cajamarca)" in proyectos
+    azul = pf.filtrar(d, "Exploración Cerro Azul (Cajamarca)")
+    assert set(azul["registro"]["comunidad"]) <= set(azul["comunidades"]["comunidad"])
+    assert "Ricardo Valdivia" not in set(azul["actores"]["nombre"])  # el gerente de la unidad no es de Cajamarca
+    assert {"Marco Llanos", "ONG Agua y Territorio"} <= set(azul["actores"]["nombre"])
+    assert set(azul["procesos"]["id"]) == {"A1", "A2"}
+    trans = pf.transversales(d["actores"], d["relaciones"], d["comunidades"])
+    assert list(trans["nombre"]) == ["ONG Agua y Territorio"] and trans.iloc[0]["n_proyectos"] == 3
+    # editar la vista de un proyecto no borra los datos de los demas
+    editado = azul["conflictos"].iloc[:1]
+    total = pf.reemplazar(d["conflictos"], azul["conflictos"], editado)
+    assert len(total) == len(d["conflictos"]) - len(azul["conflictos"]) + 1
+    res = pf.resumen(d, date(2026, 11, 7))
+    assert len(res) == 3 and res["vencidos"].sum() == (
+        registro.con_estado(d["registro"], date(2026, 11, 7))["estado"] == "Vencido").sum()
+    centro, zoom = pf.encuadre(d["comunidades"]["lat"], d["comunidades"]["lon"])
+    assert zoom < 6 < pf.encuadre(azul["comunidades"]["lat"], azul["comunidades"]["lon"])[1]

@@ -1,0 +1,32 @@
+origen,destino,tipo,descripcion,fuente
+Daniela Huamán,Wilber Ccorahua,Influye en,Dirige el equipo de campo,sintético
+Marco Llanos,Rosa Chávez,Influye en,Dirige el equipo de campo,sintético
+Hipólito Ayala,Marcelina Huarcaya,Representa a,Dirigencia de la misma comunidad,sintético
+Hipólito Ayala,Teófilo Ccahuana,Representa a,Dirigencia de la misma comunidad,sintético
+Wilber Ccorahua,Hipólito Ayala,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Puquio,Hipólito Ayala,Negocia con,Coordinación distrital,sintético
+Justino Pariona,Eulalia Quispe,Representa a,Dirigencia de la misma comunidad,sintético
+Wilber Ccorahua,Justino Pariona,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Puquio,Justino Pariona,Negocia con,Coordinación distrital,sintético
+Celestino Mallma,Rufina Ochoa,Representa a,Dirigencia de la misma comunidad,sintético
+Wilber Ccorahua,Celestino Mallma,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Puquio,Celestino Mallma,Negocia con,Coordinación distrital,sintético
+Segundo Chilón,Nélida Vásquez,Representa a,Dirigencia de la misma comunidad,sintético
+Rosa Chávez,Segundo Chilón,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Bambamarca,Segundo Chilón,Negocia con,Coordinación distrital,sintético
+Wilmer Tantaleán,Etelvina Cruzado,Representa a,Dirigencia de la misma comunidad,sintético
+Rosa Chávez,Wilmer Tantaleán,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Bambamarca,Wilmer Tantaleán,Negocia con,Coordinación distrital,sintético
+Rosa Chávez,Agustín Becerra,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Bambamarca,Agustín Becerra,Negocia con,Coordinación distrital,sintético
+Daniela Huamán,Alcalde de Puquio,Negocia con,Convenio de mantenimiento vial,sintético
+Central de Rondas de Bambamarca,Segundo Chilón,Alianza,Defensa de las lagunas,sintético
+Central de Rondas de Bambamarca,Wilmer Tantaleán,Influye en,Convoca a las bases,sintético
+Alcalde de Bambamarca,Central de Rondas de Bambamarca,Alianza,Respaldo político,sintético
+Segundo Chilón,Rosa Chávez,Conflicto,Rechazo a las plataformas cerca de las lagunas,sintético
+Hipólito Ayala,Wilber Ccorahua,Conflicto,Pago pendiente por uso superficial,sintético
+Hipólito Ayala,Justino Pariona,Parentesco,Compadres,sintético
+Agustín Becerra,Marco Llanos,Alianza,Acuerdo de uso superficial vigente,sintético
+ONG Agua y Territorio,Nélida Vásquez,Influye en,Asesoría en monitoreo de agua,sintético
+ONG Agua y Territorio,Marcelina Huarcaya,Influye en,Asesoría legal sobre uso superficial,sintético
+ONG Agua y Territorio,Central de Rondas de Bambamarca,Alianza,Pronunciamientos conjuntos,sintético

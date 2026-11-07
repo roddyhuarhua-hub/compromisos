@@ -223,6 +223,8 @@ rel("Empresa Comunal Caserío Ccasapata", "Empresa Comunal Multiservicios Pucar�
     "Disputa por los cupos de transporte para la mina")
 rel(relacionistas["Pucará"], "Empresa Comunal Multiservicios Pucará Alto", "Negocia con", "Contrato de transporte")
 rel(relacionistas["Pucará"], "Empresa Comunal Caserío Ccasapata", "Negocia con", "Evaluación como proveedor")
+rel(ana, P["C.C. Pucará Alto"], "Negocia con", "Licencias de uso de agua de la comunidad")
+rel(oefa, P["C.C. Llacctapampa"], "Negocia con", "Denuncia ambiental por el manante")
 
 pd.DataFrame(actores).to_csv(SALIDA / "actores_demo.csv", index=False)
 pd.DataFrame(relaciones).to_csv(SALIDA / "relaciones_demo.csv", index=False)
