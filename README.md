@@ -146,7 +146,7 @@ Yo definí el problema y el flujo desde mi experiencia en campo, hice las entrev
 
 ## Datos y privacidad
 
-- Los datos de ejemplo son **sintéticos**: comunidades, empresa, personas y ubicaciones ficticias (`scripts/generar_registro_demo.py`). El índice de riesgo por comunidad está documentado en `compromisos/visual.py`. Los actores, relaciones e historial de posturas de ejemplo también son ficticios (`scripts/generar_actores_demo.py`). La postura de una persona es un dato sensible: el mapa es una herramienta interna de gestión, no se publica.
+- Los datos de ejemplo son **sintéticos**: comunidades, empresa, personas y ubicaciones ficticias (`scripts/generar_registro_demo.py`). El índice de riesgo por comunidad está documentado en `compromisos/visual.py`. Los actores, relaciones e historial de posturas de ejemplo también son ficticios (`scripts/generar_actores_demo.py`), igual que los eventos de conflicto (`scripts/generar_conflictos_demo.py`). La postura de una persona es un dato sensible: el mapa es una herramienta interna de gestión, no se publica.
 - Los audios reales de reuniones no se suben al repositorio (`.gitignore`) y no se guardan en el servidor: el registro vive en la sesión y se descarga.
 - No se suben claves: se usa `.env` (ignorado) o los *Secrets* de Streamlit Cloud.
 
