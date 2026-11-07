@@ -62,3 +62,34 @@ class ExtraccionReunion(BaseModel):
     actores: list[Actor] = Field(default_factory=list, description="Actores que participan o se mencionan")
     relaciones: list[Relacion] = Field(default_factory=list,
                                        description="Relaciones entre actores que se desprenden de la reunion")
+
+
+# ------------------------------------------------------------------ conflictividad
+TipoEvento = Literal[
+    "Bloqueo de vía", "Paralización / paro", "Toma de instalaciones", "Movilización / marcha",
+    "Plantón", "Pronunciamiento / ultimátum", "Denuncia o queja formal", "Enfrentamiento", "Otro",
+]
+Desenlace = Literal[
+    "Mesa de diálogo", "Acta de acuerdos", "Levantamiento sin acuerdo", "Intervención policial",
+    "Declaratoria de emergencia", "En curso", "Otro",
+]
+
+
+class EventoConflicto(BaseModel):
+    fecha: Optional[date] = Field(default=None, description="Fecha de inicio AAAA-MM-DD")
+    tipo: TipoEvento = "Otro"
+    titulo: str = Field(description="Descripcion breve del hecho, p. ej. 'Bloqueo de la vía Pucará-Chalhuanca'")
+    lugar: str = Field(default="", description="Lugar exacto: tramo de via, km, puente, campamento, plaza")
+    comunidad: str = Field(default="", description="Comunidad o caserio principal involucrado")
+    convocantes: str = Field(default="", description="Organizaciones o dirigentes que convocaron")
+    demanda: str = Field(default="", description="Que exigian")
+    tema: Tema = "Otro"
+    duracion_dias: int = Field(default=1, ge=0, description="Dias que duro la medida")
+    participantes: Optional[int] = Field(default=None, description="Numero aproximado de participantes")
+    intensidad: Literal["alta", "media", "baja"] = "media"
+    hubo_violencia: bool = Field(default=False, description="Heridos, detenidos, daños o enfrentamientos")
+    desenlace: Desenlace = "Otro"
+
+
+class ExtraccionEventos(BaseModel):
+    eventos: list[EventoConflicto] = Field(default_factory=list)

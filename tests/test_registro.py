@@ -162,3 +162,19 @@ def test_laminas_panel_4k():
     assert len(lams) == 7
     assert Image.open(_io.BytesIO(lams[0][1])).size == (3840, 2160)
     assert panel_imagen.pptx_laminas(lams[:1])[:2] == b"PK"
+
+
+def test_conflictividad():
+    from compromisos import conflictos
+    from compromisos.modelos import EventoConflicto, ExtraccionEventos
+
+    com = pd.read_csv("datos/ejemplo/comunidades.csv")
+    c = conflictos.normalizar(pd.read_csv("datos/ejemplo/conflictos_demo.csv"))
+    k = conflictos.indicadores(c, date(2026, 11, 7))
+    assert k["eventos"] == len(c) and k["dias_paralizacion"] > 0 and k["bloqueos"] >= 1
+    ext = ExtraccionEventos(eventos=[EventoConflicto(fecha=date(2026, 11, 2), tipo="Bloqueo de vía",
+                                                     titulo="Bloqueo del puente", comunidad="Pucara Alto",
+                                                     duracion_dias=2)])
+    nuevos = conflictos.desde_extraccion(ext, com)
+    assert nuevos.iloc[0]["comunidad"] == "C.C. Pucará Alto"  # nombre sin tilde se ubica igual
+    assert abs(nuevos.iloc[0]["lat"] - (-14.05)) < 0.05

@@ -20,7 +20,7 @@ from functools import lru_cache
 
 from pydantic import ValidationError
 
-from .modelos import ExtraccionReunion
+from .modelos import ExtraccionEventos, ExtraccionReunion
 
 MODELO_WHISPER = os.getenv("MODELO_WHISPER", "whisper-large-v3-turbo")
 MODELO_LLM = os.getenv("MODELO_LLM", "llama-3.3-70b-versatile")
@@ -359,6 +359,43 @@ def extraer_compromisos(
             mensajes.append(
                 {"role": "user", "content": f"El JSON no cumple el esquema: {e}. Corrigelo."}
             )
+    raise ValueError(f"El modelo no devolvio un JSON valido: {ultimo_error}")
+
+
+SISTEMA_EVENTOS = """Eres analista de conflictos sociales en Peru (estilo de los reportes de la Defensoria del Pueblo).
+Del texto (noticia, reporte, informe de campo o acta) extrae CADA medida de protesta o hecho de conflicto
+contra la empresa o el Estado: bloqueos de via, paros, tomas de instalaciones, marchas, plantones,
+ultimatums, denuncias formales o enfrentamientos. Reglas:
+- Convierte fechas relativas en AAAA-MM-DD usando la fecha de referencia.
+- lugar: lo mas preciso posible (tramo de via, kilometro, puente, campamento, plaza).
+- No inventes datos: si no se menciona, deja el campo vacio o con su valor por defecto.
+- Si el texto no describe ningun hecho de conflicto, devuelve una lista vacia.
+Responde SOLO con un JSON valido que cumpla este esquema:
+{esquema}"""
+
+
+def extraer_eventos(texto: str, fecha_referencia: date, contexto: str = "") -> tuple[ExtraccionEventos, dict]:
+    """Extrae eventos de conflicto (bloqueos, paros, etc.) de una noticia o reporte."""
+    p = _exigir_proveedor()
+    esquema = json.dumps(ExtraccionEventos.model_json_schema(), ensure_ascii=False)
+    mensajes = [
+        {"role": "system", "content": SISTEMA_EVENTOS.format(esquema=esquema)},
+        {"role": "user", "content": f"Fecha de referencia: {fecha_referencia.isoformat()}\n"
+                                    f"Contexto: {contexto or 'sin datos'}\n\nTEXTO:\n{texto}"},
+    ]
+    uso = {"entrada": 0, "salida": 0, "proveedor": p}
+    ultimo_error = None
+    for _ in range(2):
+        crudo, t_in, t_out = _completar_json(mensajes, p)
+        uso["entrada"] += t_in
+        uso["salida"] += t_out
+        try:
+            uso["modelo"] = MODELO_LLM if p == "groq" else modelo_gemini()
+            return ExtraccionEventos.model_validate_json(_limpiar_json(crudo)), uso
+        except ValidationError as e:
+            ultimo_error = e
+            mensajes.append({"role": "assistant", "content": crudo})
+            mensajes.append({"role": "user", "content": f"El JSON no cumple el esquema: {e}. Corrigelo."})
     raise ValueError(f"El modelo no devolvio un JSON valido: {ultimo_error}")
 
 

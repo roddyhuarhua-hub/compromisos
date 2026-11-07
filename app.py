@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import actores, ia, panel_imagen, presentacion, registro, visual
+from compromisos import actores, conflictos, ia, panel_imagen, presentacion, registro, visual
 from compromisos.modelos import ExtraccionReunion
 
 RAIZ = Path(__file__).parent
@@ -155,6 +155,8 @@ if "actores" not in st.session_state:
     st.session_state.actores = actores.normalizar_actores(pd.read_csv(EJEMPLO / "actores_demo.csv"))
     st.session_state.relaciones = actores.normalizar_relaciones(pd.read_csv(EJEMPLO / "relaciones_demo.csv"))
     st.session_state.posturas = actores.normalizar_historial(pd.read_csv(EJEMPLO / "posturas_demo.csv"))
+if "conflictos" not in st.session_state:
+    st.session_state.conflictos = conflictos.normalizar(pd.read_csv(EJEMPLO / "conflictos_demo.csv"))
 
 # ---------------------------------------------------------------- barra lateral
 with st.sidebar:
@@ -229,8 +231,8 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tab_tablero, tab_actores, tab_reunion, tab_registro = st.tabs(
-    ["📊 Panel ejecutivo", "🕸️ Mapa de actores", "🎙️ Nueva reunión", "📋 Registro y descargas"]
+tab_tablero, tab_actores, tab_conflictos, tab_reunion, tab_registro = st.tabs(
+    ["📊 Panel ejecutivo", "🕸️ Mapa de actores", "🔥 Conflictividad", "🎙️ Nueva reunión", "📋 Registro y descargas"]
 )
 
 # ---------------------------------------------------------------- 1. nueva reunion
@@ -529,7 +531,7 @@ with tab_actores:
         opositores = int((M["postura"] < 0).sum())
         aliados = int((M["postura"] > 0).sum())
         puentes = M[M["puente"] & (M["intermediacion"] > 0.05)]
-        conflictos = int((R_f["tipo"] == "Conflicto").sum())
+        n_conflictos = int((R_f["tipo"] == "Conflicto").sum())
         hace_6m = (pd.Timestamp(corte) - pd.DateOffset(months=6)).date()
         mov = actores.cambios(H[H["nombre"].isin(M["nombre"])], hace_6m, corte)
         st.markdown('<div class="kpis">' + "".join([
@@ -539,7 +541,7 @@ with tab_actores:
                 f"{int(((M['postura'] < 0) & (M['influencia'] >= 4)).sum())} con alta influencia", "#c2410c"),
             kpi("🔗 Actores puente", f"{len(puentes)}", "conectan comunidades distintas", "#1f2a37"),
             kpi("↘️ Se alejaron (6 meses)", f"{int((mov['delta'] < 0).sum())}",
-                f"{int((mov['delta'] > 0).sum())} se acercaron · {conflictos} relaciones en conflicto", "#d03b3b"),
+                f"{int((mov['delta'] > 0).sum())} se acercaron · {n_conflictos} relaciones en conflicto", "#d03b3b"),
         ]) + "</div>", unsafe_allow_html=True)
 
         c1, c2 = st.columns([1.75, 1])
@@ -657,6 +659,182 @@ with tab_actores:
         b3.download_button("⬇️ Relaciones (CSV)", R.to_csv(index=False).encode("utf-8"), "relaciones.csv", "text/csv")
         st.download_button("⬇️ Historial de posturas (CSV)", H.to_csv(index=False).encode("utf-8"),
                            "historial_posturas.csv", "text/csv")
+
+# ---------------------------------------------------------------- 2c. conflictividad
+with tab_conflictos:
+    C = st.session_state.conflictos
+    st.markdown("La memoria del territorio: **paralizaciones, bloqueos de vías, tomas y otras manifestaciones** "
+                "contra la empresa, con el lugar exacto donde ocurrieron, quién convocó, qué exigían y cómo terminó. "
+                "Sirve para anticipar: los conflictos suelen repetirse en los mismos lugares y por las mismas demandas.")
+    if C.empty:
+        st.info("Aún no hay eventos registrados. Agrégalos abajo, en **Registrar un evento**.")
+    else:
+        anios = sorted({f.year for f in C["fecha"]})
+        h1, h2, h3 = st.columns([1.3, 1.4, 1.3])
+        rango = h1.slider("Años", anios[0], max(anios[-1], anios[0] + 1), (anios[0], anios[-1]), key="conf_anios") \
+            if len(anios) > 1 else (anios[0], anios[0])
+        tipos_f = h2.multiselect("Tipo de medida", list(conflictos.TIPO_COLOR), placeholder="Todas", key="conf_tipo")
+        coms_f = h3.multiselect("Comunidad", sorted(c for c in C["comunidad"].unique() if c), placeholder="Todas",
+                                key="conf_com")
+        Cf = C[C["fecha"].map(lambda f: rango[0] <= f.year <= rango[1])]
+        if tipos_f:
+            Cf = Cf[Cf["tipo"].isin(tipos_f)]
+        if coms_f:
+            Cf = Cf[Cf["comunidad"].isin(coms_f)]
+        kc = conflictos.indicadores(Cf, hoy)
+        st.markdown('<div class="kpis">' + "".join([
+            kpi("Eventos registrados", f"{kc['eventos']}", f"{kc['medidas_fuerza']} medidas de fuerza", "#2d4a33"),
+            kpi("⏱️ Días de paralización", f"{kc['dias_paralizacion']}", "bloqueos, paros y tomas", "#a32424"),
+            kpi("🚧 Bloqueos de vía", f"{kc['bloqueos']}", "tránsito y operación afectados", "#c2410c"),
+            kpi("⚠️ Con violencia", f"{kc['con_violencia']}", "heridos, detenidos o daños", "#111827"),
+            kpi("📅 Último evento", f"{kc['dias_desde_ultimo']} días" if kc["ultimo"] else "–",
+                f"{kc['ultimo']:%d/%m/%Y}" + (f" · {kc['en_curso']} en curso" if kc["en_curso"] else "")
+                if kc["ultimo"] else "", "#eda100"),
+        ]) + "</div>", unsafe_allow_html=True)
+
+        if Cf.empty:
+            st.info("No hay eventos con estos filtros.")
+        else:
+            m1, m2 = st.columns([1.75, 1])
+            with m1:
+                st.markdown("#### 📍 Dónde ocurrieron")
+                fondo_c = st.segmented_control("Fondo", list(visual.FONDOS), default="🛰️ Satélite",
+                                               label_visibility="collapsed", key="conf_fondo") or "🛰️ Satélite"
+                st.plotly_chart(conflictos.mapa(Cf, COMUNIDADES, fondo_c), width="stretch",
+                                config=cfg("mapa_conflictos", zoom=True))
+                st.caption("Calor: lugares con más días de paralización. Cada punto es un evento, coloreado por tipo; "
+                           "el tamaño crece con la duración. Pasa el mouse para ver quién convocó y qué exigían.")
+            with m2:
+                st.markdown("#### 🕑 Eventos más recientes")
+                tarjetas = []
+                for _, r in Cf.head(6).iterrows():
+                    col = conflictos.TIPO_COLOR.get(r["tipo"], "#8a8984")
+                    extra = " · ⚠️ violencia" if r["hubo_violencia"] else ""
+                    tarjetas.append(
+                        f'<div class="alerta" style="--c:{col}"><div class="t">{r["titulo"]}</div>'
+                        f'<div class="m">{r["fecha"]:%d/%m/%Y} · {r["tipo"]} · {r["lugar"] or r["comunidad"]}</div>'
+                        f'<div class="m">{r["duracion_dias"]} días · {r["desenlace"] or "sin desenlace"}{extra}</div>'
+                        f'</div>')
+                st.markdown("".join(tarjetas), unsafe_allow_html=True)
+                lugares = Cf[Cf["lugar"] != ""].groupby("lugar").agg(n=("tipo", "count"),
+                                                                     dias=("duracion_dias", "sum"))
+                lugares = lugares[lugares["n"] >= 2].sort_values(["n", "dias"], ascending=False)
+                if not lugares.empty:
+                    st.warning("**Puntos calientes que se repiten:** " + "; ".join(
+                        f"{l} ({r.n} eventos, {r.dias} días)" for l, r in lugares.head(3).iterrows()))
+
+            st.markdown("#### 📜 Cronología del conflicto por comunidad")
+            st.plotly_chart(conflictos.cronologia(Cf), width="stretch", config=cfg("cronologia_conflictos"))
+            st.caption("Tamaño: duración de la medida. Borde negro: hubo violencia.")
+
+            a1, a2 = st.columns(2)
+            with a1:
+                st.markdown("#### 📈 Eventos por año")
+                st.plotly_chart(conflictos.por_anio(Cf), width="stretch", config=cfg("conflictos_por_anio"))
+            with a2:
+                st.markdown("#### ⏱️ Días de paralización por comunidad")
+                if Cf["tipo"].isin(conflictos.DE_FUERZA).any():
+                    st.plotly_chart(conflictos.dias_por_comunidad(Cf), width="stretch",
+                                    config=cfg("dias_paralizacion"))
+                else:
+                    st.caption("Sin medidas de fuerza con estos filtros.")
+            a3, a4 = st.columns(2)
+            with a3:
+                st.markdown("#### 🎯 ¿Por qué protestan?")
+                st.plotly_chart(conflictos.motivos(Cf), width="stretch", config=cfg("motivos_conflicto"))
+            with a4:
+                st.markdown("#### 🔗 Incumplimiento y conflicto")
+                desde_c = date(hoy.year - 3, hoy.month, 1)
+                ind_c = visual.indice_comunidades(base_df, COMUNIDADES)
+                st.plotly_chart(conflictos.relacion_compromisos(C, ind_c, desde_c), width="stretch",
+                                config=cfg("incumplimiento_y_conflicto"))
+                st.caption(f"Cada punto es una comunidad: compromisos vencidos hoy vs. eventos de conflicto desde "
+                           f"{desde_c:%Y}. El tamaño crece con los días de paralización.")
+
+    # ------------------------------------------------ registrar eventos
+    with st.expander("➕ Registrar un evento", expanded=C.empty):
+        modo = st.radio("¿Cómo lo registras?", ["📰 Pegar una noticia o reporte (la IA lo ordena)",
+                                                "✍️ Llenar un formulario"], horizontal=True, key="conf_modo")
+        if modo.startswith("📰"):
+            noticia = st.text_area("Pega la noticia, el reporte de la Defensoría o tu informe de campo", height=160,
+                                   key="conf_texto",
+                                   placeholder="Ej.: Desde el lunes comuneros de Llacctapampa bloquean el puente "
+                                               "Ccollpa exigiendo el cumplimiento del acta…")
+            n1, n2 = st.columns([1, 1])
+            com_def = n1.selectbox("Comunidad por defecto", [""] + COMUNIDADES["comunidad"].tolist(),
+                                   key="conf_com_def")
+            if n2.button("🧠 Extraer eventos", type="primary", disabled=not (hay_clave and noticia.strip())):
+                with st.spinner("Leyendo el texto…"):
+                    try:
+                        ext_e, _ = ia.extraer_eventos(noticia, hoy, f"Comunidades de la zona: "
+                                                      f"{', '.join(COMUNIDADES['comunidad'])}")
+                        st.session_state.eventos_nuevos = conflictos.desde_extraccion(ext_e, COMUNIDADES, com_def)
+                    except Exception as e:  # noqa: BLE001
+                        st.error(f"No se pudo extraer: {str(e)[:200]}")
+            if not hay_clave:
+                st.caption("Necesita una clave de IA configurada; mientras tanto usa el formulario.")
+        else:
+            with st.form("form_evento", clear_on_submit=True):
+                f1, f2, f3 = st.columns(3)
+                fe = f1.date_input("Fecha", value=hoy, format="DD/MM/YYYY")
+                ti = f2.selectbox("Tipo de medida", list(conflictos.TIPO_COLOR))
+                co = f3.selectbox("Comunidad", COMUNIDADES["comunidad"].tolist())
+                tt = st.text_input("Qué pasó (título)", placeholder="Bloqueo del puente Ccollpa")
+                g1, g2 = st.columns(2)
+                lu = g1.text_input("Lugar exacto", placeholder="Puente Ccollpa, km 12")
+                cv = g2.text_input("Quién convocó", placeholder="Frente de Defensa…")
+                de = st.text_input("Qué exigían")
+                g3, g4, g5, g6 = st.columns(4)
+                du = g3.number_input("Duración (días)", 0, 365, 1)
+                pa = g4.number_input("Participantes aprox.", 0, 100000, 100, step=50)
+                vi = g5.checkbox("Hubo violencia")
+                ds = g6.selectbox("Desenlace", ["Mesa de diálogo", "Acta de acuerdos", "Levantamiento sin acuerdo",
+                                                "Intervención policial", "Declaratoria de emergencia", "En curso",
+                                                "Otro"])
+                tema_ev = st.selectbox("Tema", ["Agua", "Empleo local", "Salud", "Educación", "Infraestructura",
+                                                "Tierras", "Ambiente", "Proyectos productivos", "Monitoreo",
+                                                "Comunicación", "Otro"])
+                if st.form_submit_button("Agregar a la revisión", type="primary") and tt:
+                    lat0, lon0 = COMUNIDADES.set_index("comunidad").loc[co, ["lat", "lon"]]
+                    st.session_state.eventos_nuevos = conflictos.normalizar(pd.DataFrame([dict(
+                        fecha=fe, tipo=ti, titulo=tt, lugar=lu, comunidad=co, lat=lat0, lon=lon0, convocantes=cv,
+                        demanda=de, tema=tema_ev, duracion_dias=du, participantes=pa, intensidad="media",
+                        hubo_violencia=vi, desenlace=ds, fuente="registro manual")]))
+
+        nuevos_ev = st.session_state.get("eventos_nuevos")
+        if nuevos_ev is not None:
+            if nuevos_ev.empty:
+                st.info("La IA no encontró hechos de conflicto en ese texto.")
+            else:
+                st.markdown(f"**{len(nuevos_ev)} evento(s) para revisar.** Corrige la ubicación (lat/lon) si "
+                            "conoces el punto exacto.")
+                rev = st.data_editor(nuevos_ev, num_rows="dynamic", hide_index=True, width="stretch",
+                                     key="ed_eventos_nuevos",
+                                     column_config={"fecha": st.column_config.DateColumn(format="DD/MM/YYYY"),
+                                                    "tipo": st.column_config.SelectboxColumn(
+                                                        options=list(conflictos.TIPO_COLOR))})
+                if st.button("✅ Guardar en el historial", type="primary"):
+                    st.session_state.conflictos = conflictos.normalizar(
+                        pd.concat([st.session_state.conflictos, rev], ignore_index=True))
+                    st.session_state.eventos_nuevos = None
+                    st.toast("✅ Evento guardado: ya aparece en el mapa y la cronología.")
+                    st.rerun()
+
+    with st.expander("📝 Editar, cargar o descargar el historial"):
+        C_ed = st.data_editor(C, num_rows="dynamic", hide_index=True, width="stretch", key="ed_conflictos",
+                              column_config={"fecha": st.column_config.DateColumn(format="DD/MM/YYYY")})
+        e1, e2, e3 = st.columns(3)
+        if e1.button("Guardar cambios del historial"):
+            st.session_state.conflictos = conflictos.normalizar(C_ed)
+            st.rerun()
+        e2.download_button("⬇️ Historial (CSV)", C.to_csv(index=False).encode("utf-8"), "conflictos.csv", "text/csv")
+        sub_c = e3.file_uploader("Cargar historial (CSV)", type=["csv"], key="csv_conflictos",
+                                 label_visibility="collapsed")
+        if sub_c is not None and st.button("Usar este historial"):
+            st.session_state.conflictos = conflictos.normalizar(pd.read_csv(sub_c))
+            st.rerun()
+        st.caption("Columnas: " + ", ".join(conflictos.COLUMNAS) + ". Puedes cargar tu propia base, por ejemplo la "
+                   "que armes a partir de los reportes mensuales de la Defensoría del Pueblo.")
 
 # ---------------------------------------------------------------- 3. registro
 with tab_registro:
