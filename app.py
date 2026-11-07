@@ -526,9 +526,8 @@ with tab_tablero:
         st.plotly_chart(visual.calendario(df, hoy), width="stretch", config=cfg("calendario_vencimientos"))
 
         # --- analisis
-        c5, c6 = st.columns(2)
-        c5.plotly_chart(visual.calor_tema(df), width="stretch", config=cfg("temas_por_comunidad"))
-        c6.plotly_chart(visual.quien_incumple(df, registro.ORDEN_ESTADO), width="stretch",
+        st.plotly_chart(visual.calor_tema(df), width="stretch", config=cfg("temas_por_comunidad"))
+        st.plotly_chart(visual.quien_incumple(df, registro.ORDEN_ESTADO), width="stretch",
                         config=cfg("quien_incumple"))
         st.plotly_chart(visual.brecha(df, hoy), width="stretch", config=cfg("brecha_cumplimiento"))
 

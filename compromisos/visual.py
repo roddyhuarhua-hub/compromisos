@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import textwrap
 from datetime import date, timedelta
 
 import pandas as pd
@@ -171,12 +172,22 @@ def dona_estados(df: pd.DataFrame, orden: list[str], alto: int = 260) -> go.Figu
 
 def quien_incumple(df: pd.DataFrame, orden: list[str]) -> go.Figure:
     g = df.groupby(["responsable", "estado"]).size().reset_index(name="n")
-    fig = px.bar(g, y="responsable", x="n", color="estado", orientation="h",
-                 color_discrete_map=COLOR_ESTADO, category_orders={"estado": orden},
-                 labels={"n": "", "responsable": "", "estado": "Estado"})
-    fig.update_traces(marker_line_width=2, marker_line_color="white")
-    fig.update_layout(legend=dict(y=-0.12))
-    return base(fig, 300, "¿Quién está incumpliendo?")
+    tot = df.groupby("responsable").size()
+    venc = df[df["estado"] == "Vencido"].groupby("responsable").size().reindex(tot.index, fill_value=0)
+    orden_r = (venc / tot).sort_values().index.tolist()  # el que mas incumple, arriba
+    fig = px.bar(g, y="responsable", x="n", color="estado", orientation="h", text="n",
+                 color_discrete_map=COLOR_ESTADO, category_orders={"estado": orden, "responsable": orden_r[::-1]},
+                 labels={"n": "Compromisos", "responsable": "", "estado": "Estado"})
+    fig.update_traces(marker_line_width=2, marker_line_color="white", textposition="inside",
+                      insidetextanchor="middle", textfont=dict(color="white", size=13))
+    for r in orden_r:
+        fig.add_annotation(x=tot[r], y=r, text=f"<b>{venc[r] / tot[r]:.0%}</b> vencido", showarrow=False,
+                           xanchor="left", xshift=8, font=dict(size=13, color=COLOR_ESTADO["Vencido"]))
+    fig = base(fig, 330, "¿Quién está incumpliendo?")
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0, title=None),
+                      margin=dict(l=8, r=110, t=80, b=8), bargap=0.35)
+    fig.update_yaxes(tickfont=dict(size=14, color=TINTA))
+    return fig
 
 
 def calendario(df: pd.DataFrame, hoy: date, dias: int = 120) -> go.Figure:
@@ -209,15 +220,25 @@ def calor_tema(df: pd.DataFrame) -> go.Figure:
     if t.empty:
         return base(go.Figure(), 300, "Sin compromisos vencidos")
     t = t.loc[t.sum(axis=1).sort_values().index]
+    t = t[t.sum().sort_values(ascending=False).index]
+    xs = [f"{'<br>'.join(textwrap.wrap(c, 14))}<br><b>{int(t[c].sum())}</b>" for c in t.columns]
+    ys = [f"{i}  <b>{int(t.loc[i].sum())}</b>" for i in t.index]
     fig = go.Figure(go.Heatmap(
-        z=t.values, x=t.columns, y=t.index, xgap=3, ygap=3,
+        z=t.values, x=xs, y=ys, xgap=4, ygap=4,
         colorscale=[[0, "#fbfbfa"], [0.01, "#fde2e1"], [0.5, "#ec835a"], [1, "#a32424"]],
         text=[[str(v) if v else "" for v in fila] for fila in t.values], texttemplate="%{text}",
-        textfont=dict(size=12),
-        hovertemplate="%{y} · %{x}: %{z} vencidos<extra></extra>", showscale=False,
+        textfont=dict(size=14), customdata=[[[i, c] for c in t.columns] for i in t.index],
+        hovertemplate="%{customdata[0]} · %{customdata[1]}: %{z} vencidos<extra></extra>", showscale=False,
     ))
-    fig.update_xaxes(showgrid=False, tickangle=-20)
-    return base(fig, 340, "¿Dónde y en qué temas se acumulan los incumplimientos?")
+    fig.update_xaxes(showgrid=False, tickangle=0, side="top", tickfont=dict(size=12, color=TINTA))
+    fig.update_yaxes(tickfont=dict(size=13, color=TINTA))
+    fig = base(fig, 120 + 38 * len(t), "¿Dónde y en qué temas se acumulan los incumplimientos?")
+    fig.update_layout(margin=dict(l=8, r=8, t=120, b=30))
+    fig.add_annotation(x=0.97, y=0, xref="paper", yref="paper", yanchor="top", yshift=-6, xanchor="right",
+                       showarrow=False,
+                       text="Compromisos vencidos. En negrita, el total por tema y por comunidad.",
+                       font=dict(size=11, color=TINTA_2))
+    return fig
 
 
 def brecha(df: pd.DataFrame, hoy: date) -> go.Figure:
@@ -236,8 +257,9 @@ def brecha(df: pd.DataFrame, hoy: date) -> go.Figure:
                              line=dict(color="#8a8984", width=2, dash="dot")))
     fig.add_trace(go.Scatter(x=x, y=b.values, name="Cumplidos", mode="lines", fill="tonexty",
                              fillcolor="rgba(208,59,59,0.10)", line=dict(color=COLOR_ESTADO["Cumplido"], width=2)))
-    fig.add_annotation(x=1, xref="paper", y=a.values[-1], text=f"<b>Brecha: {a.values[-1] - b.values[-1]}</b>",
-                       showarrow=False, xanchor="right", yshift=16, font=dict(color=COLOR_ESTADO["Vencido"], size=12))
+    fig.add_annotation(x=0.97, xref="paper", y=a.values[-1], text=f"<b>Brecha: {a.values[-1] - b.values[-1]}</b>",
+                       showarrow=False, xanchor="right", xshift=-4, yshift=16,
+                       font=dict(color=COLOR_ESTADO["Vencido"], size=12))
     fig.update_yaxes(showgrid=True, gridcolor=GRID, title=None)
     fig.update_layout(hovermode="x unified")
     return base(fig, 300, "Brecha de cumplimiento acumulada")
