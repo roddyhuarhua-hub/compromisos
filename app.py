@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import actores, conflictos, ia, panel_imagen, presentacion, registro, visual
+from compromisos import actores, conflictos, ia, laminas_conflictos, panel_imagen, presentacion, registro, visual
 from compromisos.modelos import ExtraccionReunion
 
 RAIZ = Path(__file__).parent
@@ -195,6 +195,14 @@ def laminas_cache(df, corte, cliente, filtros) -> tuple[bytes, bytes]:
     """Laminas 4K del panel (una por grafico): devuelve (pptx, zip de PNG)."""
     ind_f = visual.indice_comunidades(df, COMUNIDADES)
     lams = panel_imagen.laminas(df, ind_f, registro.indicadores(df), corte, cliente, filtros)
+    return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
+
+
+@st.cache_data(show_spinner=False, max_entries=20)
+def laminas_conf_cache(conf, df, corte, cliente, filtros) -> tuple[bytes, bytes]:
+    """Laminas 4K de conflictividad: devuelve (pptx, zip de PNG)."""
+    ind_c = visual.indice_comunidades(df, COMUNIDADES)
+    lams = laminas_conflictos.laminas_conflictos(conf, ind_c, COMUNIDADES, corte, cliente, filtros)
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
@@ -691,6 +699,27 @@ with tab_conflictos:
                 f"{kc['ultimo']:%d/%m/%Y}" + (f" · {kc['en_curso']} en curso" if kc["en_curso"] else "")
                 if kc["ultimo"] else "", "#eda100"),
         ]) + "</div>", unsafe_allow_html=True)
+
+        filtros_c = " · ".join([f"{rango[0]}–{rango[1]}"] + [", ".join(tipos_f)] * bool(tipos_f)
+                               + [", ".join(c.replace("C.C. ", "") for c in coms_f)] * bool(coms_f))
+        with st.popover("📥 Bajar estos gráficos para una presentación", width="stretch"):
+            st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: "
+                        "resumen, mapa de conflictos, cronología, eventos por año, días de paralización, motivos e "
+                        "incumplimiento vs. conflicto. Respetan los filtros activos.")
+            clave_c = (filtros_c, hoy, cliente, len(Cf), int(Cf["duracion_dias"].sum()) if not Cf.empty else 0)
+            if st.button("Preparar láminas", type="primary", disabled=Cf.empty, key="btn_lam_conf"):
+                with st.spinner("Dibujando las láminas en alta resolución…"):
+                    st.session_state.laminas_conf = (clave_c, laminas_conf_cache(Cf, base_df, hoy, cliente,
+                                                                                filtros_c))
+            lc = st.session_state.get("laminas_conf")
+            if lc and lc[0] == clave_c:
+                q1, q2 = st.columns(2)
+                q1.download_button("⬇️ PowerPoint (.pptx)", lc[1][0], width="stretch",
+                                   file_name=f"confluentia_conflictividad_{hoy:%Y%m%d}.pptx", key="dl_conf_pptx",
+                                   mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                q2.download_button("⬇️ Imágenes PNG (.zip)", lc[1][1], width="stretch", key="dl_conf_zip",
+                                   file_name=f"confluentia_conflictividad_{hoy:%Y%m%d}.zip", mime="application/zip")
+            st.caption("Cada gráfico de esta pestaña también se baja suelto con el ícono 📷 al pasar el mouse.")
 
         if Cf.empty:
             st.info("No hay eventos con estos filtros.")

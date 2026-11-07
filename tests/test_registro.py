@@ -178,3 +178,18 @@ def test_conflictividad():
     nuevos = conflictos.desde_extraccion(ext, com)
     assert nuevos.iloc[0]["comunidad"] == "C.C. Pucará Alto"  # nombre sin tilde se ubica igual
     assert abs(nuevos.iloc[0]["lat"] - (-14.05)) < 0.05
+
+
+def test_laminas_conflictos_4k():
+    from PIL import Image
+    import io as _io
+
+    from compromisos import conflictos, laminas_conflictos, visual
+
+    hoy = date(2026, 11, 7)
+    com = pd.read_csv("datos/ejemplo/comunidades.csv")
+    df = registro.con_estado(registro.cargar(Path("datos/ejemplo/registro_demo.csv")), hoy)
+    c = conflictos.normalizar(pd.read_csv("datos/ejemplo/conflictos_demo.csv"))
+    lams = laminas_conflictos.laminas_conflictos(c, visual.indice_comunidades(df, com), com, hoy, "Cliente")
+    assert len(lams) == 7
+    assert Image.open(_io.BytesIO(lams[1][1])).size == (3840, 2160)
