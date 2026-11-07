@@ -902,11 +902,9 @@ with tab_conflictos:
                                     config=cfg("dias_paralizacion"))
                 else:
                     st.caption("Sin medidas de fuerza con estos filtros.")
-            a3, a4 = st.columns(2)
-            with a3:
-                st.markdown("#### 🎯 ¿Por qué protestan?")
-                st.plotly_chart(conflictos.motivos(Cf), width="stretch", config=cfg("motivos_conflicto"))
-            with a4:
+            st.markdown("#### 🎯 ¿Por qué protestan?")
+            st.plotly_chart(conflictos.motivos(Cf), width="stretch", config=cfg("motivos_conflicto"))
+            with st.container():  # a todo el ancho para que los nombres de las comunidades no se tapen
                 st.markdown("#### 🔗 Incumplimiento y conflicto")
                 desde_c = date(hoy.year - 3, hoy.month, 1)
                 ind_c = visual.indice_comunidades(base_df, COMUNIDADES)

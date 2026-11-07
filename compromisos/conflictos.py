@@ -200,39 +200,109 @@ def motivos(df: pd.DataFrame) -> go.Figure:
     return base(fig, 320)
 
 
-def relacion_compromisos(conf: pd.DataFrame, ind: pd.DataFrame, desde: date) -> go.Figure:
-    """¿Donde se incumple mas hay mas conflicto? Vencidos (x) vs medidas de protesta recientes (y)."""
+def _ubicar_etiquetas(puntos: list[dict], x_rango, y_rango, ancho_px: int, alto_px: int) -> list[dict]:
+    """Coloca cada etiqueta donde no choque con otras etiquetas ni con los puntos.
+
+    Prueba posiciones alrededor del punto (arriba, abajo, a los lados y en diagonal, cada vez mas lejos)
+    y se queda con la primera libre. Devuelve los desplazamientos en pixeles (ax, ay) para annotations."""
+    def px(x, y):
+        return ((x - x_rango[0]) / (x_rango[1] - x_rango[0]) * ancho_px,
+                (y_rango[1] - y) / (y_rango[1] - y_rango[0]) * alto_px)
+
+    ocupado = []  # cajas (x0, y0, x1, y1) en pixeles
+    for p in puntos:
+        cx, cy = px(p["x"], p["y"])
+        r = p["r"] + 2
+        ocupado.append((cx - r, cy - r, cx + r, cy + r))
+
+    def choca(c):
+        return any(not (c[2] < o[0] or c[0] > o[2] or c[3] < o[1] or c[1] > o[3]) for o in ocupado)
+
+    salida = []
+    for p in sorted(puntos, key=lambda q: (-q["y"], q["x"])):
+        cx, cy = px(p["x"], p["y"])
+        lineas = p["texto"].split("<br>")
+        w = max(len(t) for t in lineas) * 7.0 + 8
+        h = 15 * len(lineas) + 2
+        r = p["r"]
+        elegido = None
+        for paso in (1, 1.6, 2.3, 3.1, 4.0):
+            d = (r + 6) * paso
+            for ax, ay in ((0, -(d + h / 2)), (0, d + h / 2), (d + w / 2, 0), (-(d + w / 2), 0),
+                           (d * .8 + w / 2, -(d * .8 + h / 2)), (-(d * .8 + w / 2), -(d * .8 + h / 2)),
+                           (d * .8 + w / 2, d * .8 + h / 2), (-(d * .8 + w / 2), d * .8 + h / 2)):
+                bx, by = cx + ax, cy + ay
+                caja = (bx - w / 2, by - h / 2, bx + w / 2, by + h / 2)
+                if caja[0] < -20 or caja[2] > ancho_px + 20 or caja[1] < -10 or caja[3] > alto_px + 30:
+                    continue
+                if not choca(caja):
+                    elegido = (ax, ay, caja)
+                    break
+            if elegido:
+                break
+        if elegido is None:  # sin espacio libre: arriba y que se note la flecha
+            elegido = (0, -(r + 30 + h / 2), (cx - w / 2, cy - r - 30 - h, cx + w / 2, cy - r - 30))
+        ax, ay, caja = elegido
+        ocupado.append(caja)
+        salida.append(dict(p, ax=ax, ay=ay, flecha=abs(ax) + abs(ay) > r + h / 2 + 14 + w / 2 * (ax != 0)))
+    return salida
+
+
+def relacion_compromisos(conf: pd.DataFrame, ind: pd.DataFrame, desde: date, alto: int = 470,
+                         ancho_px: int = 900) -> go.Figure:
+    """¿Donde se incumple mas hay mas conflicto? Vencidos (x) vs medidas de protesta recientes (y).
+
+    Las comunidades con los mismos valores comparten una sola etiqueta (nombres uno debajo de otro)
+    y cada etiqueta se ubica donde no tape a otra."""
     rec = conf[conf["fecha"] >= desde]
     g = rec.groupby("comunidad").agg(eventos=("tipo", "count"),
                                       dias=("duracion_dias", lambda s: int(s[rec.loc[s.index, "tipo"]
                                                                             .isin(DE_FUERZA)].sum())))
     d = ind.merge(g, left_on="comunidad", right_index=True, how="left").fillna({"eventos": 0, "dias": 0})
+    d["corto"] = d["comunidad"].str.replace("C.C. ", "", regex=False)
+    d["tam"] = 16 + 3 * np.sqrt(d["dias"])
     fig = go.Figure()
     for nivel, color in SEMAFORO.items():
         s = d[d["semaforo"] == nivel]
         if s.empty:
             continue
         fig.add_trace(go.Scatter(
-            x=s["vencidos"], y=s["eventos"], mode="markers+text", name=nivel,
-            marker=dict(size=16 + 3 * np.sqrt(s["dias"]), color=color, opacity=0.85, line=dict(color="white", width=2)),
-            text=s["comunidad"].str.replace("C.C. ", "", regex=False), textposition="top center",
-            textfont=dict(size=11, color=TINTA), cliponaxis=False,
+            x=s["vencidos"], y=s["eventos"], mode="markers", name=nivel,
+            marker=dict(size=s["tam"], color=color, opacity=0.85, line=dict(color="white", width=2)),
+            text=s["corto"], cliponaxis=False,
             customdata=np.stack([s["dias"], s["indice"]], axis=-1),
             hovertemplate="<b>%{text}</b><br>Vencidos: %{x} · Eventos: %{y}<br>Días de paralización: "
                           "%{customdata[0]} · Índice: %{customdata[1]:.0f}<extra></extra>"))
+    x_max, y_max = max(1, d["vencidos"].max()), max(1, d["eventos"].max())
+    x_rango = [-0.06 * x_max - 0.6, x_max * 1.12 + 0.6]
+    y_rango = [-0.75, y_max * 1.18 + 0.6]
     if len(d) >= 3 and d["vencidos"].std() > 0:
         m, b = np.polyfit(d["vencidos"], d["eventos"], 1)
         xs = np.array([0, d["vencidos"].max()])
         fig.add_trace(go.Scatter(x=xs, y=m * xs + b, mode="lines", showlegend=False, hoverinfo="skip",
                                  line=dict(color=TINTA_2, dash="dot", width=1.5)))
         r = np.corrcoef(d["vencidos"], d["eventos"])[0, 1]
-        fig.add_annotation(x=0.02, y=0.98, xref="paper", yref="paper", showarrow=False, xanchor="left",
+        fig.add_annotation(x=0.99, y=0.99, xref="paper", yref="paper", showarrow=False, xanchor="right",
                            yanchor="top", text=f"Correlación: <b>{r:.2f}</b>", font=dict(size=12, color=TINTA),
                            bgcolor="rgba(255,255,255,0.85)")
+    # Una etiqueta por posicion: si varias comunidades caen en el mismo punto, sus nombres van juntos.
+    puntos = []
+    for (x, y), grupo in d.groupby(["vencidos", "eventos"]):
+        nombres = sorted(grupo["corto"])
+        texto = "<br>".join(nombres) if len(nombres) <= 3 else \
+            "<br>".join(nombres[:2]) + f"<br>+{len(nombres) - 2} más"
+        puntos.append(dict(x=float(x), y=float(y), texto=texto, r=float(grupo["tam"].max()) / 2))
+    area_w, area_h = ancho_px - 80, alto - 70
+    for p in _ubicar_etiquetas(puntos, x_rango, y_rango, area_w, area_h):
+        fig.add_annotation(x=p["x"], y=p["y"], text=p["texto"], ax=p["ax"], ay=p["ay"], axref="pixel",
+                           ayref="pixel", showarrow=True, arrowhead=0, arrowwidth=1,
+                           arrowcolor="rgba(71,85,105,0.55)" if p["flecha"] else "rgba(0,0,0,0)",
+                           standoff=p["r"] if p["flecha"] else 0, font=dict(size=11, color=TINTA),
+                           bgcolor="rgba(255,255,255,0.75)", borderpad=1, align="center")
     fig.update_xaxes(title="Compromisos vencidos sin cumplir", showgrid=True, gridcolor=TINTA_CLARA,
-                     range=[-0.5, d["vencidos"].max() * 1.15 + 1])
+                     range=x_rango)
     fig.update_yaxes(title=f"Eventos de conflicto desde {desde:%Y}", showgrid=True, gridcolor=TINTA_CLARA,
-                     range=[-0.4, d["eventos"].max() * 1.25 + 0.5])
-    fig = base(fig, 360)
+                     range=y_rango, dtick=1)
+    fig = base(fig, alto)
     fig.update_layout(showlegend=False)
     return fig
