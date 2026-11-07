@@ -119,3 +119,31 @@ def test_indice_comunidades():
     assert ind["indice"].between(0, 100).all()
     assert set(ind["semaforo"]) <= {"Estable", "Atención", "Crítico"}
     assert ind["lat"].notna().all()
+
+
+def test_mapeo_actores_dinamico():
+    from datetime import date
+
+    from compromisos import actores as ac
+    from compromisos.modelos import Actor, ExtraccionReunion, Relacion
+
+    A = ac.normalizar_actores(pd.DataFrame([dict(nombre="Julián Quispe", tipo="Dirigente comunal",
+                                                 comunidad="C.C. X", postura=1, influencia=5)]))
+    R = ac.normalizar_relaciones(pd.DataFrame(columns=ac.COL_RELACIONES))
+    H = ac.normalizar_historial(pd.DataFrame([dict(nombre="Julián Quispe", fecha="2026-01-10", postura=1,
+                                                   influencia=5, reunion="R1")]))
+    ext = ExtraccionReunion(resumen="", actores=[
+        Actor(nombre="julian quispe", tipo="Dirigente comunal", postura=-1, influencia=5, evidencia="No cumplen"),
+        Actor(nombre="Marta Ccahuana", tipo="Organización de base", postura=0, influencia=3)],
+        relaciones=[Relacion(origen="Julián Quispe", destino="Marta Ccahuana", tipo="Alianza")])
+    A2, R2, H2 = ac.fusionar(A, R, ext, "C.C. X", "R2", historial=H, fecha=date(2026, 6, 1), reunion="R2")
+    assert len(A2) == 2 and len(R2) == 1 and len(H2) == 3          # fusiona por nombre normalizado
+    assert A2.set_index("nombre").loc["Julián Quispe", "postura"] == -1
+    assert A2.set_index("nombre").loc["Marta Ccahuana", "comunidad"] == "C.C. X"
+    # el mapa al corte de marzo muestra la postura de entonces y aun no conoce a Marta
+    antes = ac.al_corte(A2, H2, date(2026, 3, 1))
+    assert list(antes["nombre"]) == ["Julián Quispe"] and antes["postura"].iloc[0] == 1
+    c = ac.cambios(H2, date(2026, 3, 1), date(2026, 7, 1))
+    assert c.iloc[0]["nombre"] == "Julián Quispe" and c.iloc[0]["delta"] == -2 and c.iloc[0]["evidencia"] == "No cumplen"
+    m = ac.metricas(ac.red(A2, R2))
+    assert set(m["vinculos"]) == {1}

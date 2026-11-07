@@ -281,6 +281,12 @@ Reglas:
 - cita_textual: copia la frase exacta de la transcripcion que respalda el compromiso.
 - riesgo_conflicto: alto si involucra agua, tierras, salud, empleo local o un compromiso ya incumplido
   que se repite; medio si es economico o de infraestructura; bajo si es tramite o comunicacion.
+- Mapeo de actores: lista a TODAS las personas y organizaciones que participan o se mencionan
+  (dirigentes, comites, autoridades, funcionarios, la empresa y sus areas, ONG, etc.).
+  postura hacia la empresa de -2 (opositor) a 2 (aliado), deducida de lo que dicen y hacen;
+  influencia de 1 a 5 segun su cargo y peso en la reunion. En evidencia copia la frase que lo muestra.
+- relaciones: quien representa a quien, alianzas, conflictos, quien influye en quien o negocia con quien.
+  Usa exactamente los mismos nombres que en actores.
 - Responde solo con JSON valido con este esquema:
 {esquema}
 """

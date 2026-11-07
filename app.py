@@ -22,7 +22,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import ia, registro, visual
+from compromisos import actores, ia, registro, visual
 from compromisos.modelos import ExtraccionReunion
 
 RAIZ = Path(__file__).parent
@@ -136,6 +136,10 @@ if "registro" not in st.session_state:
     st.session_state.registro = registro.cargar(EJEMPLO / "registro_demo.csv")
 if "extraccion" not in st.session_state:
     st.session_state.extraccion = None
+if "actores" not in st.session_state:
+    st.session_state.actores = actores.normalizar_actores(pd.read_csv(EJEMPLO / "actores_demo.csv"))
+    st.session_state.relaciones = actores.normalizar_relaciones(pd.read_csv(EJEMPLO / "relaciones_demo.csv"))
+    st.session_state.posturas = actores.normalizar_historial(pd.read_csv(EJEMPLO / "posturas_demo.csv"))
 
 # ---------------------------------------------------------------- barra lateral
 with st.sidebar:
@@ -169,14 +173,15 @@ st.markdown(f"""
     <span class="chip">📍 {base_df['comunidad'].nunique()} comunidades</span>
     <span class="chip">🗓️ {base_df['reunion'].nunique()} reuniones</span>
     <span class="chip">📌 {k_total['total']} compromisos</span>
+    <span class="chip">🕸️ {len(st.session_state.actores)} actores mapeados</span>
     <span class="chip">🎙️ Whisper + Gemini</span>
     <span class="chip">Corte: {hoy:%d/%m/%Y}</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-tab_tablero, tab_reunion, tab_registro = st.tabs(
-    ["📊 Panel ejecutivo", "🎙️ Nueva reunión", "📋 Registro y descargas"]
+tab_tablero, tab_actores, tab_reunion, tab_registro = st.tabs(
+    ["📊 Panel ejecutivo", "🕸️ Mapa de actores", "🎙️ Nueva reunión", "📋 Registro y descargas"]
 )
 
 # ---------------------------------------------------------------- 1. nueva reunion
@@ -273,6 +278,30 @@ with tab_reunion:
         if ext.temas_pendientes:
             st.warning("**Temas sin acuerdo:** " + "; ".join(ext.temas_pendientes))
 
+        act_nuevos = pd.DataFrame([a.model_dump() for a in ext.actores],
+                                  columns=["nombre", "tipo", "cargo", "organizacion", "comunidad",
+                                           "postura", "influencia", "evidencia"])
+        rel_nuevas = pd.DataFrame([r.model_dump() for r in ext.relaciones],
+                                  columns=["origen", "destino", "tipo", "descripcion"])
+        st.markdown(f"#### 🕸️ {len(act_nuevos)} actores y {len(rel_nuevas)} relaciones detectados")
+        st.caption("Postura hacia la empresa: −2 opositor … +2 aliado. Influencia: 1 a 5. "
+                   "Se suman al Mapa de actores al guardar (si el actor ya existe, se actualiza).")
+        act_editados = st.data_editor(
+            act_nuevos, num_rows="dynamic", width="stretch", hide_index=True, key="editor_actores",
+            column_config={
+                "nombre": "Actor", "cargo": "Cargo", "organizacion": "Organización", "comunidad": "Comunidad",
+                "tipo": st.column_config.SelectboxColumn("Tipo", options=list(actores.SIMBOLO_TIPO)),
+                "postura": st.column_config.NumberColumn("Postura", min_value=-2, max_value=2, step=1),
+                "influencia": st.column_config.NumberColumn("Influencia", min_value=1, max_value=5, step=1),
+                "evidencia": st.column_config.TextColumn("Evidencia (cita)", width="large"),
+            })
+        rel_editadas = st.data_editor(
+            rel_nuevas, num_rows="dynamic", width="stretch", hide_index=True, key="editor_relaciones",
+            column_config={
+                "origen": "Actor A", "destino": "Actor B", "descripcion": "Descripción",
+                "tipo": st.column_config.SelectboxColumn("Relación", options=list(actores.REL_ESTILO)),
+            })
+
         b1, b2 = st.columns(2)
         if b1.button("✅ Guardar en el registro", type="primary"):
             base = editados.dropna(subset=["descripcion"]).copy()
@@ -283,8 +312,21 @@ with tab_reunion:
             base["fuente"] = "IA (revisado)"
             st.session_state.registro = registro.normalizar(
                 pd.concat([st.session_state.registro, base], ignore_index=True))
+            try:
+                ext_rev = ExtraccionReunion(
+                    resumen=ext.resumen, compromisos=[], temas_pendientes=ext.temas_pendientes,
+                    actores=act_editados.dropna(subset=["nombre"]).fillna({"postura": 0, "influencia": 3})
+                    .fillna("").to_dict("records"),
+                    relaciones=rel_editadas.dropna(subset=["origen", "destino"]).fillna("").to_dict("records"))
+            except Exception:
+                ext_rev = ext  # si la edicion no es valida, se usa lo que extrajo la IA
+            (st.session_state.actores, st.session_state.relaciones,
+             st.session_state.posturas) = actores.fusionar(
+                st.session_state.actores, st.session_state.relaciones, ext_rev, comunidad,
+                fuente=f"{nombre} ({fecha_r:%d/%m/%Y})", historial=st.session_state.posturas,
+                fecha=fecha_r, reunion=nombre)
             st.session_state.extraccion = None
-            st.toast("✅ Guardado. Mira el Panel ejecutivo: el mapa y las alertas ya lo incluyen.")
+            st.toast("✅ Guardado. El Panel ejecutivo y el Mapa de actores ya lo incluyen.")
             st.rerun()
         b2.download_button(
             "⬇️ Descargar ficha de la reunión (.md)",
@@ -383,6 +425,169 @@ with tab_tablero:
         c6.plotly_chart(visual.quien_incumple(df, registro.ORDEN_ESTADO), width="stretch",
                         config={"displayModeBar": False})
         st.plotly_chart(visual.brecha(df, hoy), width="stretch", config={"displayModeBar": False})
+
+# ---------------------------------------------------------------- 2b. mapa de actores
+with tab_actores:
+    A, R, H = st.session_state.actores, st.session_state.relaciones, st.session_state.posturas
+    st.markdown("Cada reunión que procesa la IA alimenta este mapa: **quién es quién** en cada comunidad, "
+                "su postura hacia la empresa, su influencia y **cómo se relacionan** entre caseríos y comunidades. "
+                "Como las posturas cambian, cada reunión deja una *foto* fechada: mueve la línea de tiempo para "
+                "ver el mapa como estaba en otro momento.")
+    fechas_h = sorted(set(H["fecha"]) | {hoy})
+    corte = st.select_slider("📅 Ver el mapa a la fecha", options=fechas_h, value=fechas_h[-1],
+                             format_func=lambda d: d.strftime("%d/%m/%Y"), key="act_corte")
+    A = actores.al_corte(A, H, corte)
+    g1, g2, g3 = st.columns([1.4, 1.2, 1])
+    coms_a = sorted(c for c in A["comunidad"].unique() if c)
+    sel_coms = g1.multiselect("Comunidades", coms_a, placeholder="Todas", key="act_com")
+    sel_tipos = g2.multiselect("Tipo de actor", list(actores.SIMBOLO_TIPO), placeholder="Todos", key="act_tipo")
+    externos = g3.toggle("Incluir Estado, empresa y sociedad civil", value=True)
+    A_f = A.copy()
+    if sel_coms:
+        A_f = A_f[A_f["comunidad"].isin(sel_coms) | ((A_f["comunidad"] == "") & externos)]
+    elif not externos:
+        A_f = A_f[A_f["comunidad"] != ""]
+    if sel_tipos:
+        A_f = A_f[A_f["tipo"].isin(sel_tipos)]
+    nombres = set(A_f["nombre"])
+    R_f = R[R["origen"].isin(nombres) & R["destino"].isin(nombres)]
+    G = actores.red(A_f, R_f)
+    M = actores.metricas(G)
+
+    if M.empty:
+        st.info("No hay actores con estos filtros.")
+    else:
+        opositores = int((M["postura"] < 0).sum())
+        aliados = int((M["postura"] > 0).sum())
+        puentes = M[M["puente"] & (M["intermediacion"] > 0.05)]
+        conflictos = int((R_f["tipo"] == "Conflicto").sum())
+        hace_6m = (pd.Timestamp(corte) - pd.DateOffset(months=6)).date()
+        mov = actores.cambios(H[H["nombre"].isin(M["nombre"])], hace_6m, corte)
+        st.markdown('<div class="kpis">' + "".join([
+            kpi("Actores mapeados", f"{len(M)}", f"{len(R_f)} relaciones", "#1c5cab"),
+            kpi("🔵 Aliados o favorables", f"{aliados}", f"{aliados / len(M):.0%} del total", "#1c5cab"),
+            kpi("🟠 Críticos u opositores", f"{opositores}",
+                f"{int(((M['postura'] < 0) & (M['influencia'] >= 4)).sum())} con alta influencia", "#c2410c"),
+            kpi("🔗 Actores puente", f"{len(puentes)}", "conectan comunidades distintas", "#1f2a37"),
+            kpi("↘️ Se alejaron (6 meses)", f"{int((mov['delta'] < 0).sum())}",
+                f"{int((mov['delta'] > 0).sum())} se acercaron · {conflictos} relaciones en conflicto", "#d03b3b"),
+        ]) + "</div>", unsafe_allow_html=True)
+
+        c1, c2 = st.columns([1.75, 1])
+        with c1:
+            st.markdown("#### 🕸️ Red de relaciones e influencias")
+            foco = st.selectbox("Resaltar un actor y sus vínculos", ["(ninguno)"] + M["nombre"].tolist(),
+                                key="act_foco")
+            st.plotly_chart(actores.figura_red(G, M, resaltar=None if foco == "(ninguno)" else foco),
+                            width="stretch", config={"scrollZoom": True, "displayModeBar": False})
+            st.caption("Color: postura hacia la empresa. Tamaño: influencia. Forma: ● comunidad, ■ Estado/autoridad, "
+                       "◆ empresa, ▲ ONG/iglesia/medios. Borde oscuro: actor puente. Cada grupo es una comunidad.")
+        with c2:
+            st.markdown("#### ⭐ Actores clave de la red")
+            st.caption("Intermediación: qué tanto pasa por este actor la comunicación entre los demás "
+                       "(si se cae o cambia de postura, la red se reconfigura).")
+            filas = []
+            for _, r in M.head(8).iterrows():
+                col = actores.POSTURA_COLOR[int(r["postura"])]
+                ancho = max(4, int(100 * r["intermediacion"] / max(M["intermediacion"].max(), 1e-9)))
+                filas.append(
+                    f'<div class="sem"><div><div class="n">{r["nombre"]}</div>'
+                    f'<div class="d">{r["cargo"] or r["tipo"]} · {(r["comunidad"] or "externo").replace("C.C. ", "")}'
+                    f' · {r["vinculos"]} vínculos{" · 🔗 puente" if r["puente"] else ""}</div>'
+                    f'<div class="bar"><div style="width:{ancho}%;--c:{col}"></div></div></div>'
+                    f'<span class="badge" style="background:{col}">{r["postura_txt"]}</span></div>')
+            st.markdown("".join(filas), unsafe_allow_html=True)
+
+        c3, c4 = st.columns(2)
+        with c3:
+            st.markdown("#### 🎯 Matriz poder – postura")
+            st.plotly_chart(actores.matriz_poder_interes(M), width="stretch", config={"displayModeBar": False})
+            criticos = M[(M["postura"] < 0) & (M["influencia"] >= 4)].sort_values(
+                ["influencia", "postura", "vinculos"], ascending=[False, True, False]).head(6)
+            if not criticos.empty:
+                st.warning("**Gestionar de cerca:** " + ", ".join(
+                    f"{r['nombre']} ({(r['comunidad'] or r['organizacion']).replace('C.C. ', '')})"
+                    for _, r in criticos.iterrows()))
+        with c4:
+            st.markdown("#### ⚖️ Balance de posturas por comunidad")
+            if (M["comunidad"] != "").any():
+                st.plotly_chart(actores.balance_comunidades(M), width="stretch", config={"displayModeBar": False})
+            st.markdown("#### 🔗 Relaciones entre comunidades")
+            com_de = A.set_index("nombre")["comunidad"]
+            inter = R_f.assign(c_o=R_f["origen"].map(com_de), c_d=R_f["destino"].map(com_de))
+            inter = inter[(inter["c_o"] != "") & (inter["c_d"] != "") & (inter["c_o"] != inter["c_d"])]
+            if inter.empty:
+                st.caption("Sin relaciones registradas entre comunidades con estos filtros.")
+            else:
+                st.dataframe(
+                    inter.assign(Entre=inter["c_o"].str.replace("C.C. ", "") + " ↔ " + inter["c_d"].str.replace("C.C. ", ""))
+                    [["Entre", "tipo", "descripcion"]].rename(columns={"tipo": "Relación", "descripcion": "Detalle"}),
+                    hide_index=True, width="stretch")
+
+    # ------------------------------------------------ dinamica: cambios de postura
+    st.markdown("### ⏳ Dinámica de posturas en el territorio")
+    d1, d2 = st.columns([1, 2.2])
+    periodo = d1.radio("Comparar contra", ["3 meses atrás", "6 meses atrás", "1 año atrás", "Primer registro"],
+                       index=1, key="act_periodo")
+    meses = {"3 meses atrás": 3, "6 meses atrás": 6, "1 año atrás": 12}.get(periodo)
+    desde = (pd.Timestamp(corte) - pd.DateOffset(months=meses)).date() if meses else min(H["fecha"])
+    Hf = H[H["nombre"].isin(A["nombre"])]
+    if sel_coms:
+        Hf = Hf[Hf["nombre"].isin(A_f["nombre"])]
+    cam = actores.cambios(Hf, desde, corte)
+    alejan, acercan = cam[cam["delta"] < 0], cam[cam["delta"] > 0]
+    d1.markdown(
+        f'<div class="kpis" style="grid-template-columns:1fr 1fr">'
+        + kpi("↘️ Se alejan", f"{len(alejan)}", f"{int((alejan['influencia'] >= 4).sum())} con alta influencia", "#c2410c")
+        + kpi("↗️ Se acercan", f"{len(acercan)}", "oportunidad de alianza", "#1c5cab") + "</div>",
+        unsafe_allow_html=True)
+    if not alejan.empty:
+        r = alejan.iloc[0]
+        d1.error(f"**Alerta temprana:** {r['nombre']} pasó de *{actores.POSTURA_TXT[r['antes']]}* a "
+                 f"*{actores.POSTURA_TXT[r['ahora']]}* ({r['fecha_cambio']:%d/%m/%Y}, {r['reunion']}). "
+                 f"“{r['evidencia']}”")
+    with d2:
+        st.markdown(f"#### Quién cambió de postura desde el {desde:%d/%m/%Y}")
+        if cam.empty:
+            st.info("Nadie cambió de postura en este periodo.")
+        else:
+            st.plotly_chart(actores.figura_cambios(cam.head(14)), width="stretch", config={"displayModeBar": False})
+            st.caption("○ postura antes → ● postura ahora. Naranja: se aleja de la empresa; azul: se acerca. "
+                       "Ordenado por riesgo (cuánto se movió × su influencia). Pasa el mouse para ver la evidencia.")
+    st.markdown("#### 📈 Trayectoria de cada actor, reunión tras reunión")
+    # por defecto: los actores influyentes con la historia mas movida (mas posturas distintas)
+    mov_h = (Hf[Hf["fecha"] <= corte].groupby("nombre")
+             .agg(n=("postura", "nunique"), inf=("influencia", "max"), reg=("postura", "size")))
+    mov_h = mov_h[mov_h["reg"] >= 3].assign(score=lambda d: d["n"] * d["inf"]).sort_values("score", ascending=False)
+    por_defecto = mov_h.index[:4].tolist() or cam["nombre"].head(4).tolist()
+    elegidos = st.multiselect("Actores a seguir", sorted(H["nombre"].unique()), default=por_defecto,
+                              key="act_tray", max_selections=6)
+    if elegidos:
+        st.plotly_chart(actores.figura_trayectorias(H[H["fecha"] <= corte], elegidos), width="stretch",
+                        config={"displayModeBar": False})
+    if not cam.empty:
+        st.dataframe(
+            cam.assign(antes=cam["antes"].map(actores.POSTURA_TXT), ahora=cam["ahora"].map(actores.POSTURA_TXT),
+                       comunidad=cam["comunidad"].str.replace("C.C. ", ""))
+            [["nombre", "comunidad", "antes", "ahora", "fecha_cambio", "reunion", "evidencia"]]
+            .rename(columns={"nombre": "Actor", "comunidad": "Comunidad", "antes": "Antes", "ahora": "Ahora",
+                             "fecha_cambio": "Cambió el", "reunion": "Reunión", "evidencia": "Evidencia"}),
+            hide_index=True, width="stretch",
+            column_config={"Cambió el": st.column_config.DateColumn(format="DD/MM/YYYY")})
+
+    with st.expander("📝 Editar y descargar el mapa de actores"):
+        e1, e2 = st.columns(2)
+        A_ed = e1.data_editor(st.session_state.actores, num_rows="dynamic", hide_index=True, width="stretch", key="ed_actores")
+        R_ed = e2.data_editor(R, num_rows="dynamic", hide_index=True, width="stretch", key="ed_relaciones")
+        b1, b2, b3 = st.columns(3)
+        if b1.button("Guardar cambios del mapa"):
+            st.session_state.actores = actores.normalizar_actores(A_ed)
+            st.session_state.relaciones = actores.normalizar_relaciones(R_ed)
+            st.rerun()
+        b2.download_button("⬇️ Actores (CSV)", st.session_state.actores.to_csv(index=False).encode("utf-8"), "actores.csv", "text/csv")
+        b3.download_button("⬇️ Relaciones (CSV)", R.to_csv(index=False).encode("utf-8"), "relaciones.csv", "text/csv")
+        st.download_button("⬇️ Historial de posturas (CSV)", H.to_csv(index=False).encode("utf-8"),
+                           "historial_posturas.csv", "text/csv")
 
 # ---------------------------------------------------------------- 3. registro
 with tab_registro:

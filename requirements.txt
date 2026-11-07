@@ -8,3 +8,4 @@ python-dotenv>=1.0
 google-genai>=1.0
 faster-whisper>=1.1
 av>=12,<17  # PyAV reciente (19) quitó un parámetro que usa faster-whisper (TypeError en av.open)
+networkx>=3.2

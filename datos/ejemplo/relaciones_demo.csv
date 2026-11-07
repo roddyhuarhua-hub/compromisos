@@ -1,0 +1,66 @@
+origen,destino,tipo,descripcion,fuente
+Ricardo Valdivia,Luis Paredes,Influye en,Dirige el equipo de campo,sintético
+Ricardo Valdivia,Carla Mendoza,Influye en,Dirige el equipo de campo,sintético
+Ricardo Valdivia,Óscar Rivas,Influye en,Dirige el equipo de campo,sintético
+Ricardo Valdivia,Defensoría del Pueblo,Negocia con,Mesa de diálogo con observación defensorial,sintético
+Autoridad Local del Agua,OEFA - Oficina Desconcentrada,Alianza,Monitoreos conjuntos,sintético
+Frente de Defensa del Agua y la Vida,ONG Agua y Territorio,Alianza,Asesoría legal al Frente,sintético
+Frente de Defensa del Agua y la Vida,Radio Sonqo,Influye en,Comunicados y entrevistas,sintético
+Gobierno Regional,Ricardo Valdivia,Negocia con,Convenio de obras por impuestos,sintético
+Melquiades Mamani,Benedicta Ccoyllo,Representa a,Dirigencia de la misma comunidad,sintético
+Melquiades Mamani,Primitiva Soncco,Representa a,Dirigencia de la misma comunidad,sintético
+Melquiades Mamani,Severino Soncco,Representa a,Dirigencia de la misma comunidad,sintético
+Luis Paredes,Melquiades Mamani,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Pucará,Melquiades Mamani,Alianza,Respaldo político a sus demandas,sintético
+Frente de Defensa del Agua y la Vida,Melquiades Mamani,Influye en,Convoca a movilizaciones,sintético
+ONG Agua y Territorio,Benedicta Ccoyllo,Influye en,Asesoría en derechos de agua,sintético
+Melquiades Mamani,Luis Paredes,Conflicto,Compromisos incumplidos,sintético
+Parroquia San Pedro,Melquiades Mamani,Influye en,Facilita espacios de diálogo,sintético
+Radio Sonqo,Melquiades Mamani,Influye en,Difunde sus pronunciamientos,sintético
+Julián Pillaca,Feliciana Chalco,Alianza,Dirigencia de la misma comunidad,sintético
+Julián Pillaca,Justina Yupanqui,Representa a,Dirigencia de la misma comunidad,sintético
+Julián Pillaca,Melquiades Huamaní,Alianza,Dirigencia de la misma comunidad,sintético
+Luis Paredes,Julián Pillaca,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Pucará,Julián Pillaca,Alianza,Respaldo político a sus demandas,sintético
+Frente de Defensa del Agua y la Vida,Julián Pillaca,Influye en,Convoca a movilizaciones,sintético
+ONG Agua y Territorio,Feliciana Chalco,Influye en,Asesoría en derechos de agua,sintético
+Julián Pillaca,Luis Paredes,Conflicto,Compromisos incumplidos,sintético
+Parroquia San Pedro,Julián Pillaca,Influye en,Facilita espacios de diálogo,sintético
+Radio Sonqo,Julián Pillaca,Influye en,Difunde sus pronunciamientos,sintético
+Anselmo Soncco,Justina Cusihuamán,Alianza,Dirigencia de la misma comunidad,sintético
+Anselmo Soncco,Eusebio Ayquipa,Alianza,Dirigencia de la misma comunidad,sintético
+Carla Mendoza,Anselmo Soncco,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Chalhuanca,Anselmo Soncco,Negocia con,Coordinación distrital,sintético
+Anselmo Soncco,Ricardo Valdivia,Alianza,Convenio marco vigente,sintético
+Agripina Anccasi,Melquiades Taipe,Alianza,Dirigencia de la misma comunidad,sintético
+Agripina Anccasi,Natividad Ayquipa,Alianza,Dirigencia de la misma comunidad,sintético
+Agripina Anccasi,Agripina Quispe,Alianza,Dirigencia de la misma comunidad,sintético
+Luis Paredes,Agripina Anccasi,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Pucará,Agripina Anccasi,Alianza,Respaldo político a sus demandas,sintético
+Frente de Defensa del Agua y la Vida,Agripina Anccasi,Influye en,Convoca a movilizaciones,sintético
+ONG Agua y Territorio,Melquiades Taipe,Influye en,Asesoría en derechos de agua,sintético
+Agripina Anccasi,Luis Paredes,Conflicto,Compromisos incumplidos,sintético
+Feliciana Mamani,Policarpo Anccasi,Alianza,Dirigencia de la misma comunidad,sintético
+Feliciana Mamani,Gregoria Mamani,Alianza,Dirigencia de la misma comunidad,sintético
+Feliciana Mamani,Eusebio Pillaca,Alianza,Dirigencia de la misma comunidad,sintético
+Óscar Rivas,Feliciana Mamani,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Antabamba,Feliciana Mamani,Negocia con,Coordinación distrital,sintético
+Feliciana Mamani,Ricardo Valdivia,Alianza,Convenio marco vigente,sintético
+Parroquia San Pedro,Feliciana Mamani,Influye en,Facilita espacios de diálogo,sintético
+Epifanía Ccoyllo,Florencia Yupanqui,Representa a,Dirigencia de la misma comunidad,sintético
+Epifanía Ccoyllo,Primitiva Puma,Representa a,Dirigencia de la misma comunidad,sintético
+Óscar Rivas,Epifanía Ccoyllo,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Antabamba,Epifanía Ccoyllo,Negocia con,Coordinación distrital,sintético
+Eusebio Huarcaya,Fortunato Taipe,Alianza,Dirigencia de la misma comunidad,sintético
+Eusebio Huarcaya,Policarpo Pillaca,Representa a,Dirigencia de la misma comunidad,sintético
+Eusebio Huarcaya,Primitiva Ccoyllo,Representa a,Dirigencia de la misma comunidad,sintético
+Carla Mendoza,Eusebio Huarcaya,Negocia con,Interlocutor principal de la empresa,sintético
+Alcalde de Chalhuanca,Eusebio Huarcaya,Negocia con,Coordinación distrital,sintético
+Parroquia San Pedro,Eusebio Huarcaya,Influye en,Facilita espacios de diálogo,sintético
+Melquiades Mamani,Julián Pillaca,Conflicto,Disputa de linderos en la zona de Ccollpa,sintético
+Melquiades Mamani,Agripina Anccasi,Alianza,Comparten la cuenca y la demanda por agua,sintético
+Agripina Anccasi,Julián Pillaca,Parentesco,Familias emparentadas entre caseríos,sintético
+Anselmo Soncco,Eusebio Huarcaya,Alianza,Faena conjunta del canal,sintético
+Feliciana Mamani,Epifanía Ccoyllo,Parentesco,Dirigentes cuñados,sintético
+Epifanía Ccoyllo,Melquiades Mamani,Influye en,Apoya el reclamo por el manante,sintético
+Eusebio Huarcaya,Agripina Anccasi,Negocia con,Uso compartido de pastos,sintético

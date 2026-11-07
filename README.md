@@ -37,6 +37,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 3. Un **LLM con salida estructurada** (validada con Pydantic) extrae cada compromiso: qué, quién (empresa, Estado, comunidad), plazo en fecha exacta, tema, riesgo de conflicto y la **cita textual** que lo respalda. También lista las demandas que quedaron **sin acuerdo**.
 4. El relacionista **revisa y corrige** en una tabla antes de guardar (la IA propone, la persona decide).
 5. El **panel ejecutivo** muestra un mapa de calor de reuniones con el semáforo de riesgo de cada comunidad, alertas priorizadas, el calendario de vencimientos, la brecha de cumplimiento acumulada, quién incumple y en qué temas. Se descarga el registro (CSV/Excel) y una ficha de la reunión para compartir con la comunidad.
+6. **Mapa de actores dinámico.** De cada reunión la IA también identifica a los actores (dirigentes, organizaciones de base, autoridades, Estado, ONG, medios), su **postura** hacia la empresa (−2 opositor a +2 aliado), su **influencia** (1 a 5) con la frase que lo evidencia, y las **relaciones** entre ellos (alianza, conflicto, parentesco, influencia, negociación), también entre caseríos y comunidades. Con `networkx` la app calcula quién concentra vínculos, quién hace de **puente** entre comunidades (intermediación) y arma la red, la matriz poder–postura y el balance por comunidad. Como **las posturas cambian**, cada reunión deja una foto fechada: una línea de tiempo permite ver el mapa como estaba en cualquier fecha, detectar **quién se alejó o se acercó** en los últimos meses (alerta temprana ponderada por influencia) y seguir la trayectoria de cada actor reunión tras reunión.
 
 **Insight.** El problema no es que falte un lugar donde anotar los compromisos, sino que **anotarlos cuesta trabajo extra justo después de una reunión tensa**, y por eso no se hace. Si la captura sale sola del audio, el registro se llena. La cita textual es clave: en una mesa de diálogo lo que vale es lo que se dijo, y la cita permite verificarlo.
 
@@ -81,6 +82,8 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
       E --> R{Revisión humana}
       R --> REG[(Registro CSV / Excel)]
       REG --> D[📊 Tablero: alertas, KPIs, gráficos]
+      E --> ACT[(Actores, relaciones e historial de posturas)]
+      ACT --> MA[🕸️ Mapa de actores dinámico: red, puentes, cambios de postura]
       E --> FI[📝 Ficha de la reunión]
   ```
 
@@ -118,7 +121,8 @@ Margen bruto superior al 95 %. El costo real del negocio es la venta y la implem
 |---|---|
 | Speech-to-text con Whisper (S13) | `compromisos/ia.py` → `transcribir_audio()` (Whisper en Groq o `faster-whisper` local) |
 | LLM con salidas estructuradas (S08) | `compromisos/ia.py` → `extraer_compromisos()` y `compromisos/modelos.py` (esquema Pydantic) |
-| Dashboards (S05) | `app.py` → pestaña *Tablero de seguimiento* (KPIs, filtros, gráficos Plotly) |
+| Dashboards (S05) | `app.py` → pestañas *Panel ejecutivo* y *Mapa de actores* (KPIs, filtros, mapas y gráficos Plotly) |
+| Análisis de redes con Python | `compromisos/actores.py` → red de actores con `networkx` (grado, intermediación, actores puente) y evolución de posturas en el tiempo |
 | Despliegue y evaluación (S12) | Streamlit Community Cloud + `tests/` |
 
 ## 9. Qué hizo el agente
@@ -134,7 +138,7 @@ Yo definí el problema y el flujo desde mi experiencia en campo, hice las entrev
 
 ## Datos y privacidad
 
-- Los datos de ejemplo son **sintéticos**: comunidades, empresa, personas y ubicaciones ficticias (`scripts/generar_registro_demo.py`). El índice de riesgo por comunidad está documentado en `compromisos/visual.py`.
+- Los datos de ejemplo son **sintéticos**: comunidades, empresa, personas y ubicaciones ficticias (`scripts/generar_registro_demo.py`). El índice de riesgo por comunidad está documentado en `compromisos/visual.py`. Los actores, relaciones e historial de posturas de ejemplo también son ficticios (`scripts/generar_actores_demo.py`). La postura de una persona es un dato sensible: el mapa es una herramienta interna de gestión, no se publica.
 - Los audios reales de reuniones no se suben al repositorio (`.gitignore`) y no se guardan en el servidor: el registro vive en la sesión y se descarga.
 - No se suben claves: se usa `.env` (ignorado) o los *Secrets* de Streamlit Cloud.
 
