@@ -249,11 +249,13 @@ def _ubicar_etiquetas(puntos: list[dict], x_rango, y_rango, ancho_px: int, alto_
 
 
 def relacion_compromisos(conf: pd.DataFrame, ind: pd.DataFrame, desde: date, alto: int = 470,
-                         ancho_px: int = 900) -> go.Figure:
+                         ancho_px: int = 900, proyectos: dict | None = None,
+                         colores: dict | None = None) -> go.Figure:
     """¿Donde se incumple mas hay mas conflicto? Vencidos (x) vs medidas de protesta recientes (y).
 
     Las comunidades con los mismos valores comparten una sola etiqueta (nombres uno debajo de otro)
-    y cada etiqueta se ubica donde no tape a otra."""
+    y cada etiqueta se ubica donde no tape a otra. Si hay comunidades de varios proyectos (proyectos:
+    comunidad -> proyecto), los puntos se pintan por proyecto o unidad, con su leyenda, para ubicar el ambito."""
     rec = conf[conf["fecha"] >= desde]
     g = rec.groupby("comunidad").agg(eventos=("tipo", "count"),
                                       dias=("duracion_dias", lambda s: int(s[rec.loc[s.index, "tipo"]
@@ -261,18 +263,27 @@ def relacion_compromisos(conf: pd.DataFrame, ind: pd.DataFrame, desde: date, alt
     d = ind.merge(g, left_on="comunidad", right_index=True, how="left").fillna({"eventos": 0, "dias": 0})
     d["corto"] = d["comunidad"].str.replace("C.C. ", "", regex=False)
     d["tam"] = 16 + 3 * np.sqrt(d["dias"])
+    proyectos = proyectos or {}
+    d["proyecto"] = d["comunidad"].map(proyectos).fillna("")
+    por_proyecto = d["proyecto"].nunique() > 1
+    if por_proyecto:
+        orden = list(dict.fromkeys(list(colores or {}) + sorted(d["proyecto"].unique())))
+        grupos = [(p, (colores or {}).get(p, TINTA_2), d[d["proyecto"] == p]) for p in orden]
+    else:
+        grupos = [(nivel, color, d[d["semaforo"] == nivel]) for nivel, color in SEMAFORO.items()]
     fig = go.Figure()
-    for nivel, color in SEMAFORO.items():
-        s = d[d["semaforo"] == nivel]
+    for nombre, color, s in grupos:
         if s.empty:
             continue
         fig.add_trace(go.Scatter(
-            x=s["vencidos"], y=s["eventos"], mode="markers", name=nivel,
+            x=s["vencidos"], y=s["eventos"], mode="markers", name=nombre,
             marker=dict(size=s["tam"], color=color, opacity=0.85, line=dict(color="white", width=2)),
             text=s["corto"], cliponaxis=False,
-            customdata=np.stack([s["dias"], s["indice"]], axis=-1),
-            hovertemplate="<b>%{text}</b><br>Vencidos: %{x} · Eventos: %{y}<br>Días de paralización: "
-                          "%{customdata[0]} · Índice: %{customdata[1]:.0f}<extra></extra>"))
+            customdata=np.stack([s["dias"], s["indice"], s["proyecto"], s["semaforo"]], axis=-1),
+            hovertemplate="<b>%{text}</b> · %{customdata[2]}<br>Vencidos: %{x} · Eventos: %{y}<br>"
+                          "Días de paralización: %{customdata[0]} · Índice: %{customdata[1]:.0f} "
+                          "(%{customdata[3]})<extra></extra>"))
+    color_de = {p: c for p, c, _ in grupos} if por_proyecto else {}
     x_max, y_max = max(1, d["vencidos"].max()), max(1, d["eventos"].max())
     x_rango = [-0.06 * x_max - 0.6, x_max * 1.12 + 0.6]
     y_rango = [-0.75, y_max * 1.18 + 0.6]
@@ -291,18 +302,25 @@ def relacion_compromisos(conf: pd.DataFrame, ind: pd.DataFrame, desde: date, alt
         nombres = sorted(grupo["corto"])
         texto = "<br>".join(nombres) if len(nombres) <= 3 else \
             "<br>".join(nombres[:2]) + f"<br>+{len(nombres) - 2} más"
-        puntos.append(dict(x=float(x), y=float(y), texto=texto, r=float(grupo["tam"].max()) / 2))
+        puntos.append(dict(x=float(x), y=float(y), texto=texto, r=float(grupo["tam"].max()) / 2,
+                           color=color_de.get(grupo["proyecto"].iloc[0], TINTA)
+                           if grupo["proyecto"].nunique() == 1 else TINTA))
     area_w, area_h = ancho_px - 80, alto - 70
     for p in _ubicar_etiquetas(puntos, x_rango, y_rango, area_w, area_h):
         fig.add_annotation(x=p["x"], y=p["y"], text=p["texto"], ax=p["ax"], ay=p["ay"], axref="pixel",
                            ayref="pixel", showarrow=True, arrowhead=0, arrowwidth=1,
                            arrowcolor="rgba(71,85,105,0.55)" if p["flecha"] else "rgba(0,0,0,0)",
-                           standoff=p["r"] if p["flecha"] else 0, font=dict(size=11, color=TINTA),
+                           standoff=p["r"] if p["flecha"] else 0, font=dict(size=11, color=p["color"]),
                            bgcolor="rgba(255,255,255,0.75)", borderpad=1, align="center")
     fig.update_xaxes(title="Compromisos vencidos sin cumplir", showgrid=True, gridcolor=TINTA_CLARA,
                      range=x_rango)
     fig.update_yaxes(title=f"Eventos de conflicto desde {desde:%Y}", showgrid=True, gridcolor=TINTA_CLARA,
                      range=y_rango, dtick=1)
     fig = base(fig, alto)
-    fig.update_layout(showlegend=False)
+    if por_proyecto:  # leyenda arriba: un color por unidad o proyecto
+        fig.update_layout(showlegend=True, margin=dict(t=46),
+                          legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0, title=None,
+                                      font=dict(size=12, color=TINTA), itemsizing="constant"))
+    else:
+        fig.update_layout(showlegend=False)
     return fig

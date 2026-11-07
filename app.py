@@ -810,13 +810,25 @@ with tab_conflictos:
         st.info("Aún no hay eventos registrados. Agrégalos abajo, en **Registrar un evento**.")
     else:
         anios = sorted({f.year for f in C["fecha"]})
+        proy_de = dict(zip(COMUNIDADES["comunidad"], COMUNIDADES["proyecto"]))
+        varios_p = COMUNIDADES["proyecto"].nunique() > 1
         h1, h2, h3 = st.columns([1.3, 1.4, 1.3])
         rango = h1.slider("Años", anios[0], max(anios[-1], anios[0] + 1), (anios[0], anios[-1]), key="conf_anios") \
             if len(anios) > 1 else (anios[0], anios[0])
         tipos_f = h2.multiselect("Tipo de medida", list(conflictos.TIPO_COLOR), placeholder="Todas", key="conf_tipo")
-        coms_f = h3.multiselect("Comunidad", sorted(c for c in C["comunidad"].unique() if c), placeholder="Todas",
-                                key="conf_com")
+        if varios_p:  # primero la unidad o el proyecto: es lo que todos conocen
+            proys_f = h3.multiselect("Unidad o proyecto", portafolio.lista(COMUNIDADES), placeholder="Todos",
+                                     key="conf_proy")
+        else:
+            proys_f = []
+        opciones_c = sorted(c for c in C["comunidad"].unique() if c and (not proys_f or proy_de.get(c) in proys_f))
+        coms_f = st.multiselect("Comunidad", opciones_c, placeholder="Todas", key="conf_com",
+                                format_func=lambda c: f"{c} · {proy_de.get(c, '')}" if varios_p else c) \
+            if varios_p else h3.multiselect("Comunidad", opciones_c, placeholder="Todas", key="conf_com")
         Cf = C[C["fecha"].map(lambda f: rango[0] <= f.year <= rango[1])]
+        COMS_C = COMUNIDADES[COMUNIDADES["proyecto"].isin(proys_f)] if proys_f else COMUNIDADES
+        if proys_f:
+            Cf = Cf[Cf["comunidad"].map(proy_de).isin(proys_f)]
         if tipos_f:
             Cf = Cf[Cf["tipo"].isin(tipos_f)]
         if coms_f:
@@ -864,7 +876,7 @@ with tab_conflictos:
                 st.markdown("#### 📍 Dónde ocurrieron")
                 fondo_c = st.segmented_control("Fondo", list(visual.FONDOS), default="🛰️ Satélite",
                                                label_visibility="collapsed", key="conf_fondo") or "🛰️ Satélite"
-                st.plotly_chart(conflictos.mapa(Cf, COMUNIDADES, fondo_c), width="stretch",
+                st.plotly_chart(conflictos.mapa(Cf, COMS_C, fondo_c), width="stretch",
                                 config=cfg("mapa_conflictos", zoom=True))
                 st.caption("Calor: lugares con más días de paralización. Cada punto es un evento, coloreado por tipo; "
                            "el tamaño crece con la duración. Pasa el mouse para ver quién convocó y qué exigían.")
@@ -907,11 +919,16 @@ with tab_conflictos:
             with st.container():  # a todo el ancho para que los nombres de las comunidades no se tapen
                 st.markdown("#### 🔗 Incumplimiento y conflicto")
                 desde_c = date(hoy.year - 3, hoy.month, 1)
-                ind_c = visual.indice_comunidades(base_df, COMUNIDADES)
-                st.plotly_chart(conflictos.relacion_compromisos(C, ind_c, desde_c), width="stretch",
-                                config=cfg("incumplimiento_y_conflicto"))
+                ind_c = visual.indice_comunidades(base_df[base_df["comunidad"].isin(COMS_C["comunidad"])], COMS_C)
+                varios = COMS_C["proyecto"].nunique() > 1
+                st.plotly_chart(conflictos.relacion_compromisos(
+                    C, ind_c, desde_c, proyectos=dict(zip(COMS_C["comunidad"], COMS_C["proyecto"])),
+                    colores=portafolio.colores(st.session_state.comunidades)), width="stretch",
+                    config=cfg("incumplimiento_y_conflicto"))
                 st.caption(f"Cada punto es una comunidad: compromisos vencidos hoy vs. eventos de conflicto desde "
-                           f"{desde_c:%Y}. El tamaño crece con los días de paralización.")
+                           f"{desde_c:%Y}. El tamaño crece con los días de paralización. "
+                           + ("El color indica la unidad o el proyecto: haz clic en la leyenda para ocultar o "
+                              "mostrar uno." if varios else "El color indica el semáforo de la comunidad."))
 
     # ------------------------------------------------ registrar eventos
     with st.expander("➕ Registrar un evento", expanded=C.empty):

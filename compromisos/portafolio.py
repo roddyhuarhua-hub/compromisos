@@ -63,6 +63,11 @@ def lista(comunidades: pd.DataFrame) -> list[str]:
     return list(dict.fromkeys(comunidades["proyecto"]))
 
 
+def colores(comunidades: pd.DataFrame) -> dict[str, str]:
+    """Color fijo de cada proyecto (el mismo en el portafolio y en los demas graficos)."""
+    return {p: COLOR_PROYECTO[i % len(COLOR_PROYECTO)] for i, p in enumerate(lista(comunidades))}
+
+
 # ------------------------------------------------------------------ pertenencia
 def proyectos_actor(A: pd.DataFrame, R: pd.DataFrame, comunidades: pd.DataFrame) -> dict[str, set[str]]:
     """nombre -> proyectos a los que pertenece (por su comunidad o por sus relaciones, hasta 2 pasos)."""
