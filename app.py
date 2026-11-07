@@ -4,6 +4,7 @@ Ejecutar en local:   streamlit run app.py
 """
 from __future__ import annotations
 
+import base64
 import io
 import os
 import time
@@ -22,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import actores, ia, registro, visual
+from compromisos import actores, ia, presentacion, registro, visual
 from compromisos.modelos import ExtraccionReunion
 
 RAIZ = Path(__file__).parent
@@ -31,19 +32,33 @@ EJEMPLO = RAIZ / "datos" / "ejemplo"
 COLOR_ESTADO, ICONO_ESTADO = visual.COLOR_ESTADO, visual.ICONO_ESTADO
 COMUNIDADES = pd.read_csv(EJEMPLO / "comunidades.csv")
 
-st.set_page_config(page_title="Compromisos · seguimiento social con IA", page_icon="🤝", layout="wide")
+st.set_page_config(page_title="Compromisos · Confluentia", page_icon=str(RAIZ / "img" / "icono_confluentia.png"),
+                   layout="wide")
+st.logo(str(RAIZ / "img" / "logo_confluentia_horizontal.png"), icon_image=str(RAIZ / "img" / "icono_confluentia.png"),
+        size="large", link="https://www.confluentia.pe")
+LOGO_BLANCO = base64.b64encode((RAIZ / "img" / "logo_confluentia_blanco.png").read_bytes()).decode()
+
+
+def cfg(nombre: str, zoom: bool = False) -> dict:
+    """Barra del grafico con un solo boton: descargar en PNG de alta resolucion (para PPT o informes)."""
+    return {"displaylogo": False, "scrollZoom": zoom, "modeBarButtons": [["toImage"]],
+            "toImageButtonOptions": {"format": "png", "filename": f"confluentia_{nombre}", "scale": 3}}
+
 
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 html, body, [class*="css"], .stMarkdown, .stTextInput, .stButton button { font-family: 'Inter', 'Segoe UI', sans-serif; }
 .block-container { padding-top: 1.6rem; max-width: 1400px; }
-.hero { background: linear-gradient(120deg, #0d366b 0%, #1c5cab 55%, #2a78d6 100%); color: #fff;
-        border-radius: 18px; padding: 26px 30px; margin-bottom: 18px; position: relative; overflow: hidden; }
+.hero { background: linear-gradient(120deg, #1a3020 0%, #2d4a33 55%, #3f6b4a 100%); color: #fff;
+        border-radius: 18px; padding: 24px 210px 26px 30px; margin-bottom: 18px; position: relative; overflow: hidden; }
 .hero:after { content: ""; position: absolute; right: -60px; top: -60px; width: 260px; height: 260px;
               border-radius: 50%; background: rgba(255,255,255,0.07); }
 .hero h1 { color: #fff; font-size: 30px; font-weight: 700; margin: 0 0 4px 0; padding: 0; }
 .hero p { color: rgba(255,255,255,0.88); font-size: 15px; margin: 0; max-width: 820px; }
+.hero .marca { position: absolute; right: 34px; top: 50%; transform: translateY(-50%); width: 150px; opacity: 0.95; z-index: 1; }
+.hero .por { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,0.75); margin-bottom: 4px; }
+@media (max-width: 900px) { .hero .marca { display: none; } .hero { padding-right: 30px; } }
 .hero .chips { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
 .hero .chip { background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25);
               padding: 4px 12px; border-radius: 999px; font-size: 12.5px; }
@@ -144,7 +159,8 @@ if "actores" not in st.session_state:
 # ---------------------------------------------------------------- barra lateral
 with st.sidebar:
     st.markdown("## 🤝 Compromisos")
-    st.caption("Seguimiento de compromisos sociales con IA, para equipos de relaciones comunitarias.")
+    st.caption("Seguimiento de compromisos sociales con IA, para equipos de relaciones comunitarias. "
+               "Un producto de **Confluentia**.")
     hay_clave = ia.proveedor() is not None
     if hay_clave:
         st.success(f"IA conectada: {ia.descripcion_proveedor()}")
@@ -164,8 +180,33 @@ with st.sidebar:
 
 base_df = registro.con_estado(st.session_state.registro, hoy)
 k_total = registro.indicadores(base_df)
+
+
+@st.cache_data(show_spinner=False, max_entries=20)
+def pptx_cache(df, A, R, H, corte, cliente) -> bytes:
+    ind_all = visual.indice_comunidades(df, COMUNIDADES)
+    return presentacion.generar(df, ind_all, registro.indicadores(df), A, R, H, corte, cliente)
+
+
+with st.sidebar:
+    st.divider()
+    st.markdown("**📥 Llévalo a tu presentación**")
+    cliente = st.text_input("Cliente (para la portada)", "Minera Andina S.A.C. (ejemplo)")
+    if st.button("Preparar presentación (.pptx)", width="stretch"):
+        with st.spinner("Armando las diapositivas…"):
+            st.session_state.pptx = pptx_cache(base_df, st.session_state.actores, st.session_state.relaciones,
+                                               st.session_state.posturas, hoy, cliente)
+    if st.session_state.get("pptx"):
+        st.download_button("⬇️ Descargar presentación", st.session_state.pptx, type="primary", width="stretch",
+                           file_name=f"confluentia_reporte_{hoy:%Y%m%d}.pptx",
+                           mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+    st.caption("8 diapositivas con la marca Confluentia: resumen, semáforo, estados, vencidos, mapa de actores y "
+               "cambios de postura. Los gráficos son editables en PowerPoint. Cada gráfico de la app también se "
+               "baja como imagen con el ícono 📷 que aparece al pasar el mouse.")
 st.markdown(f"""
 <div class="hero">
+  <img class="marca" src="data:image/png;base64,{LOGO_BLANCO}" alt="Confluentia">
+  <div class="por">Confluentia · Inteligencia social para decisiones estratégicas en territorio</div>
   <h1>🤝 Compromisos</h1>
   <p>De la mesa de diálogo al seguimiento de cada acuerdo. La IA escucha la reunión, extrae quién prometió qué
   y para cuándo, y alerta antes de que un compromiso incumplido se convierta en conflicto.</p>
@@ -326,6 +367,7 @@ with tab_reunion:
                 fuente=f"{nombre} ({fecha_r:%d/%m/%Y})", historial=st.session_state.posturas,
                 fecha=fecha_r, reunion=nombre)
             st.session_state.extraccion = None
+            st.session_state.pop("pptx", None)  # la presentacion se vuelve a armar con los datos nuevos
             st.toast("✅ Guardado. El Panel ejecutivo y el Mapa de actores ya lo incluyen.")
             st.rerun()
         b2.download_button(
@@ -375,7 +417,7 @@ with tab_tablero:
             fondo = st.segmented_control("Fondo del mapa", list(visual.FONDOS), default="🛰️ Satélite",
                                          label_visibility="collapsed") or "🛰️ Satélite"
             st.plotly_chart(visual.mapa(ind, reuniones, fondo=fondo), width="stretch",
-                            config={"scrollZoom": True, "displayModeBar": False})
+                            config=cfg("mapa_comunidades", zoom=True))
             st.caption("Halo: intensidad de reuniones. Círculos: comunidades, coloreadas por índice de riesgo; "
                        "el tamaño crece con los compromisos vencidos. Usa la rueda del mouse para acercar.")
         with c2:
@@ -391,7 +433,7 @@ with tab_tablero:
                     f'<span class="badge" style="--c:{col}">{r["semaforo"]} · {r["indice"]:.0f}</span></div>')
             st.markdown('<div class="card">' + "".join(filas) + "</div>", unsafe_allow_html=True)
             st.markdown("##### Cumplimiento global")
-            st.plotly_chart(visual.gauge(tasa, 200), width="stretch", config={"displayModeBar": False})
+            st.plotly_chart(visual.gauge(tasa, 200), width="stretch", config=cfg("cumplimiento"))
 
         # --- alertas + estados
         c3, c4 = st.columns([1.2, 1])
@@ -414,17 +456,17 @@ with tab_tablero:
         with c4:
             st.markdown("#### Estado de los compromisos")
             st.plotly_chart(visual.dona_estados(df, registro.ORDEN_ESTADO), width="stretch",
-                            config={"displayModeBar": False})
+                            config=cfg("estados"))
 
         # --- calendario
-        st.plotly_chart(visual.calendario(df, hoy), width="stretch", config={"displayModeBar": False})
+        st.plotly_chart(visual.calendario(df, hoy), width="stretch", config=cfg("calendario_vencimientos"))
 
         # --- analisis
         c5, c6 = st.columns(2)
-        c5.plotly_chart(visual.calor_tema(df), width="stretch", config={"displayModeBar": False})
+        c5.plotly_chart(visual.calor_tema(df), width="stretch", config=cfg("temas_por_comunidad"))
         c6.plotly_chart(visual.quien_incumple(df, registro.ORDEN_ESTADO), width="stretch",
-                        config={"displayModeBar": False})
-        st.plotly_chart(visual.brecha(df, hoy), width="stretch", config={"displayModeBar": False})
+                        config=cfg("quien_incumple"))
+        st.plotly_chart(visual.brecha(df, hoy), width="stretch", config=cfg("brecha_cumplimiento"))
 
 # ---------------------------------------------------------------- 2b. mapa de actores
 with tab_actores:
@@ -479,7 +521,7 @@ with tab_actores:
             foco = st.selectbox("Resaltar un actor y sus vínculos", ["(ninguno)"] + M["nombre"].tolist(),
                                 key="act_foco")
             st.plotly_chart(actores.figura_red(G, M, resaltar=None if foco == "(ninguno)" else foco),
-                            width="stretch", config={"scrollZoom": True, "displayModeBar": False})
+                            width="stretch", config=cfg("red_actores", zoom=True))
             st.caption("Color: postura hacia la empresa. Tamaño: influencia. Forma: ● comunidad, ■ Estado/autoridad, "
                        "◆ empresa, ▲ ONG/iglesia/medios. Borde oscuro: actor puente. Cada grupo es una comunidad.")
         with c2:
@@ -501,7 +543,7 @@ with tab_actores:
         c3, c4 = st.columns(2)
         with c3:
             st.markdown("#### 🎯 Matriz poder – postura")
-            st.plotly_chart(actores.matriz_poder_interes(M), width="stretch", config={"displayModeBar": False})
+            st.plotly_chart(actores.matriz_poder_interes(M), width="stretch", config=cfg("matriz_poder_postura"))
             criticos = M[(M["postura"] < 0) & (M["influencia"] >= 4)].sort_values(
                 ["influencia", "postura", "vinculos"], ascending=[False, True, False]).head(6)
             if not criticos.empty:
@@ -511,7 +553,7 @@ with tab_actores:
         with c4:
             st.markdown("#### ⚖️ Balance de posturas por comunidad")
             if (M["comunidad"] != "").any():
-                st.plotly_chart(actores.balance_comunidades(M), width="stretch", config={"displayModeBar": False})
+                st.plotly_chart(actores.balance_comunidades(M), width="stretch", config=cfg("balance_posturas"))
             st.markdown("#### 🔗 Relaciones entre comunidades")
             com_de = A.set_index("nombre")["comunidad"]
             inter = R_f.assign(c_o=R_f["origen"].map(com_de), c_d=R_f["destino"].map(com_de))
@@ -551,7 +593,7 @@ with tab_actores:
         if cam.empty:
             st.info("Nadie cambió de postura en este periodo.")
         else:
-            st.plotly_chart(actores.figura_cambios(cam.head(14)), width="stretch", config={"displayModeBar": False})
+            st.plotly_chart(actores.figura_cambios(cam.head(14)), width="stretch", config=cfg("cambios_postura"))
             st.caption("○ postura antes → ● postura ahora. Naranja: se aleja de la empresa; azul: se acerca. "
                        "Ordenado por riesgo (cuánto se movió × su influencia). Pasa el mouse para ver la evidencia.")
     st.markdown("#### 📈 Trayectoria de cada actor, reunión tras reunión")
@@ -564,7 +606,7 @@ with tab_actores:
                               key="act_tray", max_selections=6)
     if elegidos:
         st.plotly_chart(actores.figura_trayectorias(H[H["fecha"] <= corte], elegidos), width="stretch",
-                        config={"displayModeBar": False})
+                        config=cfg("trayectorias_actores"))
     if not cam.empty:
         st.dataframe(
             cam.assign(antes=cam["antes"].map(actores.POSTURA_TXT), ahora=cam["ahora"].map(actores.POSTURA_TXT),

@@ -1,5 +1,9 @@
 # 🤝 Compromisos
 
+<img src="img/logo_confluentia_horizontal.png" alt="Confluentia" height="44">
+
+*Un producto de [Confluentia](https://www.confluentia.pe) · Inteligencia social para decisiones estratégicas en territorio.*
+
 **Demo:** https://compromisos-roddy.streamlit.app · **Video de respaldo:** _pendiente_
 
 > Proyecto final de la Diplomatura Q-Lab PUCP · Data Science con Python ([issue #204](https://github.com/d2cml-ai/Data-Science-Python/issues/204)).
@@ -38,6 +42,8 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 4. El relacionista **revisa y corrige** en una tabla antes de guardar (la IA propone, la persona decide).
 5. El **panel ejecutivo** muestra un mapa de calor de reuniones con el semáforo de riesgo de cada comunidad, alertas priorizadas, el calendario de vencimientos, la brecha de cumplimiento acumulada, quién incumple y en qué temas. Se descarga el registro (CSV/Excel) y una ficha de la reunión para compartir con la comunidad.
 6. **Mapa de actores dinámico.** De cada reunión la IA también identifica a los actores (dirigentes, organizaciones de base, autoridades, Estado, ONG, medios), su **postura** hacia la empresa (−2 opositor a +2 aliado), su **influencia** (1 a 5) con la frase que lo evidencia, y las **relaciones** entre ellos (alianza, conflicto, parentesco, influencia, negociación), también entre caseríos y comunidades. Con `networkx` la app calcula quién concentra vínculos, quién hace de **puente** entre comunidades (intermediación) y arma la red, la matriz poder–postura y el balance por comunidad. Como **las posturas cambian**, cada reunión deja una foto fechada: una línea de tiempo permite ver el mapa como estaba en cualquier fecha, detectar **quién se alejó o se acercó** en los últimos meses (alerta temprana ponderada por influencia) y seguir la trayectoria de cada actor reunión tras reunión.
+
+7. **Listo para presentar.** Cada gráfico se descarga como imagen PNG en alta resolución (ícono 📷 al pasar el mouse) y la barra lateral arma una **presentación PowerPoint de 8 diapositivas** con la marca de la consultora: resumen ejecutivo, semáforo por comunidad, estado de compromisos, vencidos prioritarios, mapa de actores y cambios de postura. Los gráficos del PPT son **nativos y editables** (`python-pptx`); la red de actores se dibuja con `matplotlib`.
 
 **Insight.** El problema no es que falte un lugar donde anotar los compromisos, sino que **anotarlos cuesta trabajo extra justo después de una reunión tensa**, y por eso no se hace. Si la captura sale sola del audio, el registro se llena. La cita textual es clave: en una mesa de diálogo lo que vale es lo que se dijo, y la cita permite verificarlo.
 
@@ -123,6 +129,7 @@ Margen bruto superior al 95 %. El costo real del negocio es la venta y la implem
 | LLM con salidas estructuradas (S08) | `compromisos/ia.py` → `extraer_compromisos()` y `compromisos/modelos.py` (esquema Pydantic) |
 | Dashboards (S05) | `app.py` → pestañas *Panel ejecutivo* y *Mapa de actores* (KPIs, filtros, mapas y gráficos Plotly) |
 | Análisis de redes con Python | `compromisos/actores.py` → red de actores con `networkx` (grado, intermediación, actores puente) y evolución de posturas en el tiempo |
+| Reportes automáticos | `compromisos/presentacion.py` → presentación .pptx con gráficos nativos (`python-pptx`, `matplotlib`) |
 | Despliegue y evaluación (S12) | Streamlit Community Cloud + `tests/` |
 
 ## 9. Qué hizo el agente
