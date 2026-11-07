@@ -15,7 +15,8 @@ import plotly.graph_objects as go
 
 from .actores import clave
 from .modelos import ExtraccionEventos
-from .visual import FONDOS, SEMAFORO, TINTA, TINTA_2, base, encuadre
+from .visual import FONDOS, SEMAFORO, TINTA, TINTA_2, base
+from .zoom import encuadre
 
 COLUMNAS = ["fecha", "tipo", "titulo", "lugar", "comunidad", "lat", "lon", "convocantes", "demanda", "tema",
             "duracion_dias", "participantes", "intensidad", "hubo_violencia", "desenlace", "fuente"]

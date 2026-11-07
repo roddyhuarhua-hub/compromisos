@@ -131,7 +131,7 @@ def reemplazar(total: pd.DataFrame, vista: pd.DataFrame, editado: pd.DataFrame) 
     return pd.concat([resto, editado], ignore_index=True)
 
 
-encuadre = visual.encuadre  # centro y zoom para una o varias regiones
+from .zoom import encuadre  # noqa: E402  centro y zoom para una o varias regiones
 
 
 # ------------------------------------------------------------------ resumen corporativo
@@ -242,7 +242,7 @@ def figura_mapa(res: pd.DataFrame, comunidades: pd.DataFrame, ind: pd.DataFrame,
     cen = comunidades.groupby("proyecto").agg(lat=("lat", "mean"), lon=("lon", "mean")).reindex(res["proyecto"])
     # el proyecto mas al este se rotula a la derecha y los demas debajo, para que no se encimen
     pos = ["middle right" if lo == cen["lon"].max() else "bottom center" for lo in cen["lon"]]
-    centro, zoom = visual.encuadre(comunidades["lat"], comunidades["lon"], alto_px=alto)
+    centro, zoom = encuadre(comunidades["lat"], comunidades["lon"], alto_px=alto)
     paso = 18 / (256 * 2 ** zoom / 360)  # ~18 px en grados: el rotulo no debe tapar los puntos (se ocultaria)
     for (nom, f_), pos_ in zip(cen.iterrows(), pos):  # Scattermap acepta una sola posicion por traza
         derecha = pos_ == "middle right"
