@@ -165,6 +165,35 @@ if "extraccion" not in st.session_state:
     st.session_state.extraccion = None
 
 # ---------------------------------------------------------------- barra lateral
+CLAVES_PROY = ["proyecto", "proy_panel", "proy_actores", "proy_riesgos"]
+
+
+def sincronizar_proyecto(origen: str) -> None:
+    """Al cambiar el proyecto en un selector, los demas selectores muestran el mismo."""
+    valor = st.session_state[origen]
+    for k_ in CLAVES_PROY:
+        st.session_state[k_] = valor
+
+
+def selector_proyecto(clave: str) -> None:
+    """Selector de unidad o proyecto al inicio de una pestaña, con una linea de contexto del ambito elegido."""
+    s1, s2 = st.columns([1.3, 2.7], vertical_alignment="bottom")
+    s1.selectbox("🗂️ Unidad o proyecto", [portafolio.TODOS] + PROYECTOS, key=clave,
+                 on_change=sincronizar_proyecto, args=(clave,),
+                 help="Cada unidad o proyecto tiene sus propios actores, conflictos y procesos. "
+                      "El cambio se aplica a todas las pestañas.")
+    if PROY == portafolio.TODOS:
+        s2.caption(f"🌐 Mirada corporativa: **{len(PROYECTOS)} proyectos**, {len(COMUNIDADES)} comunidades y "
+                   f"{len(V['actores'])} actores juntos. Elige uno para decidir con el detalle de sus actores.")
+    else:
+        info = st.session_state.proyectos.set_index("proyecto") \
+            if not st.session_state.proyectos.empty else pd.DataFrame()
+        extra = " · ".join(str(info.at[PROY, c_]) for c_ in ("tipo", "fase", "responsable")
+                           if PROY in info.index and c_ in info.columns and str(info.at[PROY, c_]))
+        s2.caption(f"📍 **{PROY}**" + (f" · {extra}" if extra else "") +
+                   f" · {len(COMUNIDADES)} comunidades · {len(V['actores'])} actores · {len(V['procesos'])} procesos")
+
+
 with st.sidebar:
     st.markdown("## 🤝 Compromisos")
     st.caption("Seguimiento de compromisos sociales con IA, para equipos de relaciones comunitarias. "
@@ -175,7 +204,13 @@ with st.sidebar:
     else:
         st.warning("Sin clave de IA: puedes usar la reunión de ejemplo.")
     PROYECTOS = portafolio.lista(st.session_state.comunidades)
+    # El proyecto se elige aqui o al inicio de cada pestaña de analisis: todos los selectores van sincronizados.
+    for k_ in CLAVES_PROY:
+        if st.session_state.get(k_) not in [portafolio.TODOS] + PROYECTOS:
+            st.session_state[k_] = st.session_state.get("proyecto", portafolio.TODOS) \
+                if st.session_state.get("proyecto") in PROYECTOS else portafolio.TODOS
     PROY = st.selectbox("🗂️ Proyecto", [portafolio.TODOS] + PROYECTOS, key="proyecto",
+                        on_change=sincronizar_proyecto, args=("proyecto",),
                         help="Elige un proyecto para ver solo sus comunidades, actores, conflictos y procesos. "
                              "Con «Todos» ves la mirada corporativa en la pestaña Portafolio.")
     if st.session_state.get("_proy_previo") != PROY:  # la presentacion general depende del proyecto
@@ -503,6 +538,7 @@ with tab_reunion:
 
 # ---------------------------------------------------------------- 2. panel ejecutivo
 with tab_tablero:
+    selector_proyecto("proy_panel")
     df = base_df
     f1, f2, f3 = st.columns(3)
     comunidades_f = f1.multiselect("Comunidad", sorted(df["comunidad"].unique()), placeholder="Todas")
@@ -615,6 +651,7 @@ with tab_tablero:
 
 # ---------------------------------------------------------------- 2b. mapa de actores
 with tab_actores:
+    selector_proyecto("proy_actores")
     A, R, H = V["actores"], V["relaciones"], V["posturas"]
     st.markdown("Cada reunión que procesa la IA alimenta este mapa: **quién es quién** en cada comunidad, "
                 "su postura hacia la empresa, su influencia y **cómo se relacionan** entre caseríos y comunidades. "
@@ -1025,6 +1062,7 @@ def postura_opc(v: int) -> str:
 
 
 with tab_riesgos:
+    selector_proyecto("proy_riesgos")
     A_hoy = actores.al_corte(V["actores"], V["posturas"], hoy)
     R_r, H_r, C_r = V["relaciones"], V["posturas"], V["conflictos"]
     P_r, PA_r = V["procesos"], V["partes"]
