@@ -23,7 +23,8 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import actores, conflictos, ia, laminas_actores, laminas_conflictos, panel_imagen, presentacion, registro, visual
+from compromisos import (actores, conflictos, ia, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
+                         presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
 RAIZ = Path(__file__).parent
@@ -72,6 +73,8 @@ html, body, [class*="css"], .stMarkdown, .stTextInput, .stButton button { font-f
 .card { background: #fff; border: 1px solid rgba(31,42,55,0.08); border-radius: 14px; padding: 14px 16px;
         box-shadow: 0 1px 2px rgba(16,24,40,0.04); margin-bottom: 10px; }
 .card h4 { margin: 0 0 6px 0; font-size: 15px; color: #1f2a37; }
+.evento { background: #fff; border: 1px solid rgba(31,42,55,0.08); border-radius: 12px; padding: 12px 16px;
+          margin-bottom: 10px; font-size: 14px; line-height: 1.5; color: #1f2a37; }
 .alerta { border-left: 4px solid var(--c); padding: 10px 12px; border-radius: 10px; background: #fff;
           border-top: 1px solid rgba(31,42,55,0.06); border-right: 1px solid rgba(31,42,55,0.06);
           border-bottom: 1px solid rgba(31,42,55,0.06); margin-bottom: 8px; }
@@ -157,6 +160,11 @@ if "actores" not in st.session_state:
     st.session_state.posturas = actores.normalizar_historial(pd.read_csv(EJEMPLO / "posturas_demo.csv"))
 if "conflictos" not in st.session_state:
     st.session_state.conflictos = conflictos.normalizar(pd.read_csv(EJEMPLO / "conflictos_demo.csv"))
+if "procesos" not in st.session_state:
+    st.session_state.procesos = riesgos.normalizar_procesos(pd.read_csv(EJEMPLO / "procesos_demo.csv"))
+    st.session_state.partes = riesgos.normalizar_partes(pd.read_csv(EJEMPLO / "proceso_actores_demo.csv"))
+    st.session_state.escenarios = riesgos.normalizar_escenarios(pd.read_csv(EJEMPLO / "escenarios_demo.csv"))
+    st.session_state.acciones = riesgos.normalizar_acciones(pd.read_csv(EJEMPLO / "acciones_demo.csv"))
 
 # ---------------------------------------------------------------- barra lateral
 with st.sidebar:
@@ -209,6 +217,13 @@ def laminas_act_cache(A, R, H, corte, cliente, filtros) -> tuple[bytes, bytes]:
 
 
 @st.cache_data(show_spinner=False, max_entries=20)
+def laminas_riesgo_cache(pr, partes, A, R, H, conf, df, escenarios, acciones, corte, cliente) -> tuple[bytes, bytes]:
+    """Laminas 4K del proceso elegido en Riesgos y decisiones: devuelve (pptx, zip de PNG)."""
+    lams = laminas_riesgos.laminas_riesgos(pr, partes, A, R, H, conf, df, escenarios, acciones, corte, cliente)
+    return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
+
+
+@st.cache_data(show_spinner=False, max_entries=20)
 def laminas_conf_cache(conf, df, corte, cliente, filtros, fondo="satelite") -> tuple[bytes, bytes]:
     """Laminas 4K de conflictividad: devuelve (pptx, zip de PNG)."""
     ind_c = visual.indice_comunidades(df, COMUNIDADES)
@@ -249,8 +264,9 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tab_tablero, tab_actores, tab_conflictos, tab_reunion, tab_registro = st.tabs(
-    ["📊 Panel ejecutivo", "🕸️ Mapa de actores", "🔥 Conflictividad", "🎙️ Nueva reunión", "📋 Registro y descargas"]
+tab_tablero, tab_actores, tab_conflictos, tab_riesgos, tab_reunion, tab_registro = st.tabs(
+    ["📊 Panel ejecutivo", "🕸️ Mapa de actores", "🔥 Conflictividad", "🎯 Riesgos y decisiones", "🎙️ Nueva reunión",
+     "📋 Registro y descargas"]
 )
 
 # ---------------------------------------------------------------- 1. nueva reunion
@@ -900,6 +916,267 @@ with tab_conflictos:
             st.rerun()
         st.caption("Columnas: " + ", ".join(conflictos.COLUMNAS) + ". Puedes cargar tu propia base, por ejemplo la "
                    "que armes a partir de los reportes mensuales de la Defensoría del Pueblo.")
+
+# ---------------------------------------------------------------- riesgos y decisiones
+POSTURA_OPC = [f"{k:+d} · {v}" if k else f"0 · {v}" for k, v in actores.POSTURA_TXT.items()]
+
+
+def postura_opc(v: int) -> str:
+    return POSTURA_OPC[int(v) + 2]
+
+
+with tab_riesgos:
+    A_hoy = actores.al_corte(st.session_state.actores, st.session_state.posturas, hoy)
+    R_r, H_r, C_r = st.session_state.relaciones, st.session_state.posturas, st.session_state.conflictos
+    P_r, PA_r = st.session_state.procesos, st.session_state.partes
+    ES_r, AC_r = st.session_state.escenarios, st.session_state.acciones
+    st.markdown("Del diagnóstico a la decisión. Para cada **proceso clave** (una servidumbre, un contrato con una "
+                "empresa comunal, un monitoreo) la herramienta cruza lo que ya sabe del territorio: **quién está en "
+                "contra y cuánto pesa**, **qué conflictos hubo antes** en esa comunidad, **qué compromisos están "
+                "vencidos** y **quién se está alejando**. Con eso estima el riesgo de paralización, muestra quién "
+                "puede frenar el proceso y te deja probar escenarios antes de decidir.")
+    if P_r.empty:
+        st.info("Aún no hay procesos. Agrégalos abajo, en **Editar procesos y actores**.")
+    else:
+        cart = riesgos.cartera(P_r, PA_r, A_hoy, H_r, C_r, base_df, hoy)
+        pend = AC_r[AC_r["estado"] != "Hecha"]
+        prox = cart.dropna(subset=["dias_plazo"]).sort_values("dias_plazo")
+        prox = prox[prox["dias_plazo"] >= 0]
+        st.markdown('<div class="kpis">' + "".join([
+            kpi("Procesos en seguimiento", f"{len(cart)}", f"{(cart['impacto'] >= 4).sum()} de alto impacto", "#2d4a33"),
+            kpi("🔴 Riesgo alto", f"{(cart['nivel'] == 'Alto').sum()}", "pueden paralizarse", "#d03b3b"),
+            kpi("🟡 Riesgo medio", f"{(cart['nivel'] == 'Medio').sum()}", "requieren atención", "#eda100"),
+            kpi("📅 Próximo hito", f"{int(prox.iloc[0]['dias_plazo'])} días" if not prox.empty else "–",
+                prox.iloc[0]["proceso"][:38] if not prox.empty else "", "#1c5cab"),
+            kpi("📋 Acciones pendientes", f"{len(pend)}",
+                f"{int((pend['fecha'].notna() & (pend['fecha'] < hoy)).sum())} atrasadas", "#5b6675"),
+        ]) + "</div>", unsafe_allow_html=True)
+
+        c1, c2 = st.columns([1.1, 1])
+        with c1:
+            st.markdown("##### Cartera de procesos: riesgo vs. impacto")
+            st.plotly_chart(riesgos.figura_cartera(cart, alto=330), width="stretch",
+                            config=cfg("cartera_procesos"))
+        with c2:
+            st.markdown("##### Prioridad (riesgo × impacto)")
+            vista = cart.assign(semaforo=cart["nivel"].map({"Alto": "🔴", "Medio": "🟡", "Bajo": "🟢"}))
+            st.dataframe(vista[["semaforo", "id", "proceso", "riesgo", "impacto", "dias_plazo"]],
+                         hide_index=True, width="stretch",
+                         column_config={"semaforo": st.column_config.TextColumn("", width=30),
+                                        "id": st.column_config.TextColumn("", width=40),
+                                        "proceso": st.column_config.TextColumn("Proceso", width="medium"),
+                                        "riesgo": st.column_config.ProgressColumn("Riesgo", min_value=0, max_value=100,
+                                                                                  format="%d", width="small"),
+                                        "impacto": st.column_config.NumberColumn("Impacto", format="%d/5"),
+                                        "dias_plazo": st.column_config.NumberColumn("Faltan", format="%d días")})
+
+        st.divider()
+        nombres_p = dict(zip(cart["id"], cart["proceso"]))
+        pid = st.selectbox("🔎 Proceso a analizar", list(nombres_p), key="rg_proceso",
+                           format_func=lambda i: f"{i} · {nombres_p[i]}")
+        pr = P_r[P_r["id"] == pid].iloc[0]
+        r0 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy)
+        color_n = riesgos.NIVEL_COLOR[r0["nivel"]]
+        plazo = (f"{pr['fecha_limite']:%d/%m/%Y} (faltan {r0['dias_plazo']} días)" if r0["dias_plazo"] is not None
+                 and r0["dias_plazo"] >= 0 else f"{pr['fecha_limite']:%d/%m/%Y} (vencido)"
+                 if r0["dias_plazo"] is not None else "sin fecha")
+        st.markdown(f"""
+<div class="evento" style="border-left:6px solid {color_n}">
+  <div style="font-size:19px;font-weight:700;color:#1f2a37">{pr['proceso']}</div>
+  <div style="color:#5b6675;margin:2px 0 8px 0">{pr['tipo']} · {pr['comunidad']} · {pr['estado']} ·
+  responsable: {pr['responsable'] or '—'}</div>
+  <b>Hito:</b> {pr['hito']} · <b>Plazo:</b> {plazo} · <b>Impacto:</b> {'●' * pr['impacto']}{'○' * (5 - pr['impacto'])}<br>
+  <b>Si se paraliza:</b> {pr['si_se_paraliza'] or '—'}
+</div>""", unsafe_allow_html=True)
+
+        m1, m2, m3 = st.columns([0.85, 1.2, 1.15])
+        with m1:
+            st.markdown(f"##### Riesgo de paralización: <span style='color:{color_n}'>{r0['nivel']}</span>",
+                        unsafe_allow_html=True)
+            st.plotly_chart(riesgos.figura_medidor(r0["puntos"]), width="stretch", config=cfg("riesgo_proceso"))
+        with m2:
+            st.markdown("##### De dónde viene el riesgo")
+            st.plotly_chart(riesgos.figura_componentes(r0), width="stretch", config=cfg("componentes_riesgo"))
+        with m3:
+            st.markdown("##### Por qué")
+            for n, (pts, txt) in r0["componentes"].items():
+                ic = "🔴" if pts >= 0.6 * riesgos.MAXIMOS[n] else "🟡" if pts >= 0.3 * riesgos.MAXIMOS[n] else "🟢"
+                st.markdown(f"{ic} **{n}:** {txt}.")
+        st.caption("El puntaje (0–100) es una guía para conversar en el equipo, no una predicción: suma la oposición "
+                   "de quienes deciden o pueden vetar (40), los precedentes de medidas de fuerza en la comunidad (20), "
+                   "los compromisos vencidos (20) y las posturas que empeoraron en 6 meses (20).")
+
+        # --- quien puede frenar el proceso
+        st.markdown("#### 🚧 Quién puede frenar el proceso y cómo acercarse")
+        p0 = r0["partes"]
+        if p0.empty:
+            st.info("Este proceso aún no tiene actores asignados. Agrégalos en **Editar procesos y actores**.")
+        else:
+            st.plotly_chart(riesgos.figura_actores(p0, alto=480), width="stretch", config=cfg("actores_proceso"))
+            st.markdown("##### A quién atender primero")
+            for v2, (_, a) in zip(st.columns(3), p0[p0["presion"] > 0].head(3).iterrows()):
+                with v2:
+                    pts_ = riesgos.puentes(a["nombre"], A_hoy, R_r)
+                    dist = riesgos.distancia_empresa(a["nombre"], A_hoy, R_r)
+                    st.markdown(f"""
+<div class="evento" style="border-left:5px solid {actores.POSTURA_COLOR[int(a['postura'])]}">
+<b>{a['nombre']}</b> · {a['rol']} · {actores.POSTURA_TXT[int(a['postura'])]} · influencia {a['influencia']}/5<br>
+<span style="color:#5b6675">Quiere:</span> {a['interes'] or '—'}<br>
+<span style="color:#5b6675">Le preocupa:</span> {a['preocupacion'] or '—'}<br>
+<span style="color:#5b6675">Estrategia sugerida:</span> <b>{a['estrategia']}</b><br>
+<span style="color:#5b6675">Quién puede abrir el diálogo:</span> {', '.join(pts_[:3]) or 'sin puentes en el mapa'}
+{f'· a {dist} pasos de la empresa en la red' if dist else ''}
+</div>""", unsafe_allow_html=True)
+            with st.expander("Ver todos los actores del proceso"):
+                st.dataframe(p0[["nombre", "rol", "postura", "influencia", "interes", "preocupacion", "estrategia"]]
+                             .assign(postura=p0["postura"].map(actores.POSTURA_TXT)), hide_index=True,
+                             width="stretch")
+
+            # --- simulador
+            st.markdown("#### 🔀 ¿Qué pasa si…? Prueba escenarios antes de decidir")
+            es_p = ES_r[ES_r["proceso_id"] == pid]
+            nombres_es = list(dict.fromkeys(es_p["escenario"]))
+            res_es = [(n, riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy,
+                                          dict(zip(g["nombre"], g["postura_nueva"])))["puntos"])
+                      for n, g in ((n, es_p[es_p["escenario"] == n]) for n in nombres_es)]
+            s1, s2 = st.columns([1, 1.1])
+            with s1:
+                if res_es:
+                    st.markdown("##### Riesgo de cada escenario")
+                    st.plotly_chart(riesgos.figura_escenarios(res_es, r0["puntos"],
+                                                              alto=120 + 48 * len(res_es)),
+                                    width="stretch", config=cfg("escenarios"))
+                else:
+                    st.info("Este proceso aún no tiene escenarios. Arma uno a la derecha y guárdalo.")
+            with s2:
+                st.markdown("##### Arma tu escenario")
+                elegidos = st.multiselect("Combina escenarios guardados", nombres_es, key=f"rg_esc_{pid}",
+                                          default=nombres_es[:1], placeholder="Ninguno")
+                cambios = {}
+                for n in elegidos:
+                    g = es_p[es_p["escenario"] == n]
+                    cambios.update(dict(zip(g["nombre"], g["postura_nueva"])))
+                tabla = p0[["nombre", "rol", "postura_antes"]].copy()
+                tabla["postura_antes"] = tabla["postura_antes"].map(postura_opc)
+                tabla["en_escenario"] = [postura_opc(cambios.get(n, p)) for n, p in
+                                         zip(p0["nombre"], p0["postura_antes"])]
+                ed = st.data_editor(tabla, hide_index=True, width="stretch", key=f"rg_ed_{pid}_{'|'.join(elegidos)}",
+                                    disabled=["nombre", "rol", "postura_antes"], height=260,
+                                    column_config={"nombre": "Actor", "rol": "Rol", "postura_antes": "Hoy",
+                                                   "en_escenario": st.column_config.SelectboxColumn(
+                                                       "En el escenario", options=POSTURA_OPC, required=True)})
+            manual = {n: POSTURA_OPC.index(v) - 2 for n, v in zip(ed["nombre"], ed["en_escenario"])}
+            cambios = {n: v for n, v in manual.items()
+                       if v != int(p0.loc[p0["nombre"] == n, "postura_antes"].iloc[0])}
+            r1 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy, cambios)
+            o1, o2 = st.columns([0.8, 1.3])
+            with o1:
+                st.markdown(f"##### Resultado: <span style='color:{riesgos.NIVEL_COLOR[r1['nivel']]}'>"
+                            f"{r1['nivel']}</span>", unsafe_allow_html=True)
+                st.plotly_chart(riesgos.figura_medidor(r1["puntos"], antes=r0["puntos"]), width="stretch",
+                                config=cfg("riesgo_escenario"))
+            with o2:
+                if not cambios:
+                    st.info("Cambia la postura esperada de uno o más actores (o elige un escenario guardado) para "
+                            "ver cómo se mueve el riesgo.")
+                else:
+                    elegido = es_p[es_p["escenario"].isin(elegidos)]
+                    motivo = {n: m for n, m in zip(elegido["nombre"], elegido["motivo"]) if m}
+                    filas = [f"- **{n}**: {actores.POSTURA_TXT[int(p0.loc[p0['nombre'] == n, 'postura_antes'].iloc[0])]}"
+                             f" → **{actores.POSTURA_TXT[v]}**" + (f" · _{motivo[n]}_" if n in motivo else "")
+                             for n, v in cambios.items()]
+                    st.markdown("**Qué cambia**\n" + "\n".join(filas))
+                    ten = riesgos.tensiones([n for n, v in cambios.items()
+                                             if v < int(p0.loc[p0["nombre"] == n, "postura_antes"].iloc[0])], R_r)
+                    for _, t in ten.iterrows():
+                        st.warning(f"Se tensiona una relación ya conflictiva: **{t['origen']} ↔ {t['destino']}** "
+                                   f"({t['descripcion']}).")
+                    dif = r1["puntos"] - r0["puntos"]
+                    (st.success if dif < 0 else st.error if dif > 0 else st.info)(
+                        f"El riesgo pasa de **{r0['puntos']}** a **{r1['puntos']}** ({dif:+d} puntos).")
+                    with st.popover("💾 Guardar como escenario"):
+                        nom_e = st.text_input("Nombre del escenario", key=f"rg_nom_{pid}")
+                        if st.button("Guardar", disabled=not nom_e, key=f"rg_guardar_{pid}"):
+                            nuevos = pd.DataFrame([dict(proceso_id=pid, escenario=nom_e, nombre=n, postura_nueva=v,
+                                                        motivo="") for n, v in cambios.items()])
+                            st.session_state.escenarios = riesgos.normalizar_escenarios(
+                                pd.concat([ES_r, nuevos], ignore_index=True))
+                            st.rerun()
+
+            # --- plan de accion
+            st.markdown("#### 📋 Plan de acción por actor")
+            ac_p = AC_r[AC_r["proceso_id"] == pid]
+            hechas = int((ac_p["estado"] == "Hecha").sum())
+            sin_plan = p0[(p0["presion"] > 0) & ~p0["nombre"].isin(ac_p["nombre"])]
+            st.caption(f"{hechas} de {len(ac_p)} acciones hechas." + (
+                f" ⚠️ {len(sin_plan)} actores en contra sin acción asignada: {', '.join(sin_plan['nombre'])}."
+                if len(sin_plan) else " Todos los actores en contra tienen al menos una acción."))
+            ac_ed = st.data_editor(ac_p.drop(columns=["proceso_id"]).reset_index(drop=True), num_rows="dynamic", hide_index=True,
+                                   width="stretch", key=f"rg_acc_{pid}_{len(ac_p)}",
+                                   column_config={
+                                       "nombre": st.column_config.SelectboxColumn("Actor", options=list(p0["nombre"])),
+                                       "estrategia": st.column_config.SelectboxColumn("Estrategia",
+                                                                                      options=riesgos.ESTRATEGIAS),
+                                       "accion": st.column_config.TextColumn("Acción", width="large"),
+                                       "responsable": "Responsable",
+                                       "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                                       "estado": st.column_config.SelectboxColumn("Estado",
+                                                                                  options=riesgos.ESTADOS_ACCION)})
+            b1, b2, b3 = st.columns(3)
+            if b1.button("💾 Guardar el plan", type="primary", key=f"rg_acc_guardar_{pid}"):
+                st.session_state.acciones = riesgos.normalizar_acciones(pd.concat(
+                    [AC_r[AC_r["proceso_id"] != pid], ac_ed.assign(proceso_id=pid)], ignore_index=True))
+                st.toast("✅ Plan de acción guardado.")
+                st.rerun()
+            if b2.button("✨ Sugerir acciones para quienes no tienen", disabled=sin_plan.empty and
+                         p0[~p0["nombre"].isin(ac_p["nombre"])].empty, key=f"rg_sug_{pid}"):
+                sug = riesgos.sugerir_acciones(pid, p0, AC_r, pr["responsable"])
+                st.session_state.acciones = riesgos.normalizar_acciones(pd.concat([AC_r, sug], ignore_index=True))
+                st.rerun()
+            b3.download_button("⬇️ Plan de acción (CSV)", AC_r.to_csv(index=False).encode("utf-8"),
+                               "plan_de_accion.csv", "text/csv", key="rg_acc_csv")
+
+            with st.popover("📥 Bajar el análisis de este proceso para una presentación", width="stretch"):
+                st.markdown("**4 láminas en 4K (3840 × 2160)**: riesgo del proceso y por qué, quién puede frenarlo, "
+                            "escenarios y plan de acción.")
+                clave_r = (pid, hoy, cliente, len(PA_r), len(ES_r), len(AC_r), int(A_hoy["postura"].sum()),
+                           r0["puntos"])
+                if st.button("Preparar láminas", type="primary", key="btn_lam_rg"):
+                    with st.spinner("Dibujando las láminas en alta resolución…"):
+                        st.session_state.laminas_rg = (clave_r, laminas_riesgo_cache(
+                            pr, PA_r, A_hoy, R_r, H_r, C_r, base_df, ES_r, AC_r, hoy, cliente))
+                lr = st.session_state.get("laminas_rg")
+                if lr and lr[0] == clave_r:
+                    q1, q2 = st.columns(2)
+                    q1.download_button("⬇️ PowerPoint (.pptx)", lr[1][0], width="stretch", key="dl_rg_pptx",
+                                       file_name=f"confluentia_riesgo_{pid}_{hoy:%Y%m%d}.pptx",
+                                       mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                    q2.download_button("⬇️ Imágenes PNG (.zip)", lr[1][1], width="stretch", key="dl_rg_zip",
+                                       file_name=f"confluentia_riesgo_{pid}_{hoy:%Y%m%d}.zip", mime="application/zip")
+
+    with st.expander("📝 Editar procesos y actores de cada proceso"):
+        st.markdown("**Procesos**")
+        P_ed = st.data_editor(P_r, num_rows="dynamic", hide_index=True, width="stretch", key="ed_procesos",
+                              column_config={"fecha_limite": st.column_config.DateColumn(format="DD/MM/YYYY"),
+                                             "impacto": st.column_config.NumberColumn(min_value=1, max_value=5),
+                                             "comunidad": st.column_config.SelectboxColumn(
+                                                 options=list(COMUNIDADES["comunidad"]))})
+        st.markdown("**Actores de cada proceso** (el nombre debe coincidir con el mapa de actores)")
+        PA_ed = st.data_editor(PA_r, num_rows="dynamic", hide_index=True, width="stretch", key="ed_partes",
+                               column_config={"rol": st.column_config.SelectboxColumn(options=riesgos.ROLES),
+                                              "nombre": st.column_config.SelectboxColumn(
+                                                  options=sorted(st.session_state.actores["nombre"]))})
+        f1, f2, f3 = st.columns(3)
+        if f1.button("Guardar procesos y actores", type="primary"):
+            st.session_state.procesos = riesgos.normalizar_procesos(P_ed)
+            st.session_state.partes = riesgos.normalizar_partes(PA_ed)
+            st.rerun()
+        f2.download_button("⬇️ Procesos (CSV)", P_r.to_csv(index=False).encode("utf-8"), "procesos.csv", "text/csv")
+        f3.download_button("⬇️ Actores por proceso (CSV)", PA_r.to_csv(index=False).encode("utf-8"),
+                           "proceso_actores.csv", "text/csv")
+        st.caption("Roles: **Decide** (aprueba o firma), **Puede vetar** (puede frenar el proceso), **Influye** "
+                   "(mueve opinión) y **Afectado**. La postura y la influencia se toman del mapa de actores, así que "
+                   "cada reunión nueva actualiza el riesgo.")
 
 # ---------------------------------------------------------------- 3. registro
 with tab_registro:
