@@ -11,6 +11,7 @@ import pandas as pd
 from matplotlib.lines import Line2D
 from matplotlib.patches import FancyBboxPatch, Rectangle
 
+from . import mapa_base
 from .conflictos import DE_FUERZA, TIPO_COLOR, indicadores
 from .panel_imagen import BORDE, TINTA, TINTA_2, VERDE, VERDE_OSC, _a_png, _claves, _corto, _lamina
 from .visual import SEMAFORO
@@ -27,14 +28,14 @@ def _leyenda_tipos(ax, tipos, **kw):
     ax.legend(handles=h, frameon=False, fontsize=11.5, **kw)
 
 
-def _mapa(ax, df: pd.DataFrame, comunidades: pd.DataFrame):
+def _mapa(ax, df: pd.DataFrame, comunidades: pd.DataFrame, fondo: str = "satelite"):
     d = df.dropna(subset=["lat", "lon"])
     c = comunidades.dropna(subset=["lat", "lon"])
     for _, r in d[d["tipo"].isin(DE_FUERZA)].iterrows():  # halo de calor: dias de paralizacion
         for k, a in ((9, 0.05), (5, 0.08)):
             ax.scatter(r["lon"], r["lat"], s=(80 + 60 * r["duracion_dias"]) * k, color="#eb6834", alpha=a, lw=0,
                        zorder=1)
-    ax.scatter(c["lon"], c["lat"], s=70, color=TINTA, marker="^", zorder=2)
+    ax.scatter(c["lon"], c["lat"], s=110, color="white", edgecolors=TINTA, linewidths=1.5, marker="^", zorder=2)
     for _, r in c.iterrows():
         ax.annotate(_corto(r["comunidad"]), (r["lon"], r["lat"]), xytext=(0, -20), textcoords="offset points",
                     ha="center", fontsize=12, fontweight="bold", color=TINTA, zorder=5,
@@ -50,12 +51,13 @@ def _mapa(ax, df: pd.DataFrame, comunidades: pd.DataFrame):
     my = (todo["lat"].max() - todo["lat"].min()) * 0.12 + 0.03
     ax.set_xlim(todo["lon"].min() - mx, todo["lon"].max() + mx)
     ax.set_ylim(todo["lat"].min() - my, todo["lat"].max() + my)
-    ax.set_aspect("equal", adjustable="box")
+    ax.set_aspect(1 / np.cos(np.radians(todo["lat"].mean())), adjustable="box")
     ax.set_facecolor("#eef3ee")
     ax.set_xticks([])
     ax.set_yticks([])
     for sp in ax.spines.values():
         sp.set_visible(False)
+    mapa_base.poner_fondo(ax, fondo)  # imagen satelital o relieve debajo (si hay internet)
     _leyenda_tipos(ax, [t for t in TIPO_COLOR if (d["tipo"] == t).any()], loc="upper center",
                    bbox_to_anchor=(0.5, -0.01), ncol=4)
 
@@ -84,7 +86,7 @@ def _cronologia(ax, df: pd.DataFrame):
 
 
 def laminas_conflictos(conf: pd.DataFrame, ind: pd.DataFrame, comunidades: pd.DataFrame, hoy: date,
-                       cliente: str = "", filtros: str = "") -> list[tuple[str, bytes]]:
+                       cliente: str = "", filtros: str = "", fondo: str = "satelite") -> list[tuple[str, bytes]]:
     """Devuelve [(nombre_archivo, png 3840x2160), ...]."""
     out = []
     if conf.empty:
@@ -134,7 +136,7 @@ def laminas_conflictos(conf: pd.DataFrame, ind: pd.DataFrame, comunidades: pd.Da
                   f"{int(lugares.iloc[0]['dias'])} días de medidas." if not lugares.empty else "Lugares de los eventos.",
                   cliente, hoy, filtros)
     ax = fig.add_axes([0.035, 0.16, 0.62, 0.66])
-    _mapa(ax, conf, comunidades)
+    _mapa(ax, conf, comunidades, fondo)
     _claves(fig, **LADO, titulo="Puntos calientes que se repiten", puntos=[
         (f"{int(r.n)}", f"eventos en {lugar} ({int(r.dias)} días)", "#c2410c")
         for lugar, r in lugares.head(3).iterrows()])

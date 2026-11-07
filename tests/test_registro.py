@@ -208,3 +208,24 @@ def test_laminas_actores_4k():
     lams = laminas_actores.laminas_actores(ac.al_corte(A, H, corte), R, H, corte, "Cliente")
     assert len(lams) == 7
     assert Image.open(_io.BytesIO(lams[1][1])).size == (3840, 2160)
+
+
+def test_mapa_base_une_mosaicos(monkeypatch):
+    """El fondo satelital se arma con los tiles descargados (aqui simulados, sin internet)."""
+    import io as _io
+
+    from PIL import Image
+
+    from compromisos import mapa_base
+
+    def falso(url):
+        b = _io.BytesIO()
+        Image.new("RGB", (256, 256), (30, 90, 40)).save(b, "PNG")
+        return b.getvalue()
+
+    monkeypatch.setattr(mapa_base, "_descargar", falso)
+    img, extent, atribucion = mapa_base.mosaico(-73.3, -72.4, -14.4, -13.9)
+    assert img.shape[0] == 600 and extent == (-73.3, -72.4, -14.4, -13.9) and "Esri" in atribucion
+    assert tuple(img[300, 300]) == (30, 90, 40)
+    monkeypatch.setattr(mapa_base, "_descargar", lambda url: None)  # sin internet: no rompe
+    assert mapa_base.mosaico(-73.3, -72.4, -14.4, -13.9) is None

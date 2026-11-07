@@ -21,6 +21,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.patches import FancyBboxPatch, Rectangle  # noqa: E402
 
+from . import mapa_base  # noqa: E402
 from .visual import COLOR_ESTADO, SEMAFORO  # noqa: E402
 
 IMG = Path(__file__).resolve().parents[1] / "img"
@@ -52,7 +53,7 @@ def _kpi(fig, x, y, w, h, etiqueta, valor, sub, color):
     fig.text(x + 0.012, y + 0.012, sub, fontsize=11.5, color=TINTA_2)
 
 
-def _mapa(ax, ind: pd.DataFrame):
+def _mapa(ax, ind: pd.DataFrame, fondo: str = "satelite"):
     d = ind.dropna(subset=["lat", "lon"])
     if d.empty:
         ax.axis("off")
@@ -72,12 +73,13 @@ def _mapa(ax, ind: pd.DataFrame):
     mx, my = (d["lon"].max() - d["lon"].min()) * 0.25 + 0.03, (d["lat"].max() - d["lat"].min()) * 0.25 + 0.03
     ax.set_xlim(d["lon"].min() - mx, d["lon"].max() + mx)
     ax.set_ylim(d["lat"].min() - my, d["lat"].max() + my)
-    ax.set_aspect("equal", adjustable="box")
+    ax.set_aspect(1 / np.cos(np.radians(d["lat"].mean())), adjustable="box")
     ax.set_facecolor("#eef3ee")
     ax.set_xticks([])
     ax.set_yticks([])
     for s in ax.spines.values():
         s.set_visible(False)
+    mapa_base.poner_fondo(ax, fondo)  # imagen satelital o relieve debajo (si hay internet)
     for nivel, c in SEMAFORO.items():
         ax.scatter([], [], color=c, s=80, label=nivel)
     ax.legend(loc="lower left", fontsize=10.5, frameon=True, framealpha=0.9, edgecolor="none")
@@ -216,8 +218,9 @@ def _corto(c: str) -> str:
 
 
 def laminas(df: pd.DataFrame, ind: pd.DataFrame, k: dict, hoy: date, cliente: str = "",
-            filtros: str = "") -> list[tuple[str, bytes]]:
-    """Devuelve [(nombre_archivo, png 3840x2160), ...], una lamina por seccion del panel."""
+            filtros: str = "", fondo: str = "satelite") -> list[tuple[str, bytes]]:
+    """Devuelve [(nombre_archivo, png 3840x2160), ...], una lamina por seccion del panel.
+    fondo: 'satelite' o 'relieve' (mapa base de la lamina territorial)."""
     out = []
     tasa = k["tasa_cumplimiento"]
     criticas = ind[ind["semaforo"] == "Crítico"]
@@ -267,7 +270,7 @@ def laminas(df: pd.DataFrame, ind: pd.DataFrame, k: dict, hoy: date, cliente: st
                   f"{_corto(peor['comunidad'])} concentra el mayor riesgo (índice {peor['indice']:.0f}/100, "
                   f"{peor['vencidos']} compromisos vencidos).", cliente, hoy, filtros)
     ax = fig.add_axes([grande["x"], grande["y"], grande["w"], grande["h"]])
-    _mapa(ax, ind)
+    _mapa(ax, ind, fondo)
     _claves(fig, **lado, titulo="Lo que hay que saber", puntos=[
         (f"{len(criticas)}", "comunidades en estado crítico: " + ", ".join(_corto(c) for c in criticas["comunidad"]),
          SEMAFORO["Crítico"]),

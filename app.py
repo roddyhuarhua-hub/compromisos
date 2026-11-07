@@ -190,11 +190,14 @@ def pptx_cache(df, A, R, H, corte, cliente) -> bytes:
     return presentacion.generar(df, ind_all, registro.indicadores(df), A, R, H, corte, cliente)
 
 
+FONDO_LAMINA = {"🛰️ Satélite": "satelite", "⛰️ Relieve": "relieve"}
+
+
 @st.cache_data(show_spinner=False, max_entries=20)
-def laminas_cache(df, corte, cliente, filtros) -> tuple[bytes, bytes]:
+def laminas_cache(df, corte, cliente, filtros, fondo="satelite") -> tuple[bytes, bytes]:
     """Laminas 4K del panel (una por grafico): devuelve (pptx, zip de PNG)."""
     ind_f = visual.indice_comunidades(df, COMUNIDADES)
-    lams = panel_imagen.laminas(df, ind_f, registro.indicadores(df), corte, cliente, filtros)
+    lams = panel_imagen.laminas(df, ind_f, registro.indicadores(df), corte, cliente, filtros, fondo)
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
@@ -206,10 +209,10 @@ def laminas_act_cache(A, R, H, corte, cliente, filtros) -> tuple[bytes, bytes]:
 
 
 @st.cache_data(show_spinner=False, max_entries=20)
-def laminas_conf_cache(conf, df, corte, cliente, filtros) -> tuple[bytes, bytes]:
+def laminas_conf_cache(conf, df, corte, cliente, filtros, fondo="satelite") -> tuple[bytes, bytes]:
     """Laminas 4K de conflictividad: devuelve (pptx, zip de PNG)."""
     ind_c = visual.indice_comunidades(df, COMUNIDADES)
-    lams = laminas_conflictos.laminas_conflictos(conf, ind_c, COMUNIDADES, corte, cliente, filtros)
+    lams = laminas_conflictos.laminas_conflictos(conf, ind_c, COMUNIDADES, corte, cliente, filtros, fondo)
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
@@ -424,10 +427,11 @@ with tab_tablero:
         st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: "
                     "resumen, mapa territorial, semáforo, estado, quién incumple, temas y brecha. "
                     "Respetan los filtros que tengas activos.")
-        clave_lam = (filtros_txt, hoy, cliente, len(df), int(df["cumplido"].sum()))
+        fondo_l = FONDO_LAMINA[st.radio("Fondo del mapa", list(FONDO_LAMINA), horizontal=True, key="fondo_lam")]
+        clave_lam = (filtros_txt, hoy, cliente, len(df), int(df["cumplido"].sum()), fondo_l)
         if st.button("Preparar láminas", type="primary", disabled=df.empty):
-            with st.spinner("Dibujando las láminas en alta resolución…"):
-                st.session_state.laminas = (clave_lam, laminas_cache(df, hoy, cliente, filtros_txt))
+            with st.spinner("Dibujando las láminas en alta resolución (descargando el mapa satelital)…"):
+                st.session_state.laminas = (clave_lam, laminas_cache(df, hoy, cliente, filtros_txt, fondo_l))
         lam = st.session_state.get("laminas")
         if lam and lam[0] == clave_lam:  # solo si corresponden a los filtros actuales
             p1, p2 = st.columns(2)
@@ -735,11 +739,14 @@ with tab_conflictos:
             st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: "
                         "resumen, mapa de conflictos, cronología, eventos por año, días de paralización, motivos e "
                         "incumplimiento vs. conflicto. Respetan los filtros activos.")
-            clave_c = (filtros_c, hoy, cliente, len(Cf), int(Cf["duracion_dias"].sum()) if not Cf.empty else 0)
+            fondo_lc = FONDO_LAMINA[st.radio("Fondo del mapa", list(FONDO_LAMINA), horizontal=True,
+                                             key="fondo_lam_conf")]
+            clave_c = (filtros_c, hoy, cliente, len(Cf), int(Cf["duracion_dias"].sum()) if not Cf.empty else 0,
+                       fondo_lc)
             if st.button("Preparar láminas", type="primary", disabled=Cf.empty, key="btn_lam_conf"):
-                with st.spinner("Dibujando las láminas en alta resolución…"):
+                with st.spinner("Dibujando las láminas en alta resolución (descargando el mapa satelital)…"):
                     st.session_state.laminas_conf = (clave_c, laminas_conf_cache(Cf, base_df, hoy, cliente,
-                                                                                filtros_c))
+                                                                                filtros_c, fondo_lc))
             lc = st.session_state.get("laminas_conf")
             if lc and lc[0] == clave_c:
                 q1, q2 = st.columns(2)
