@@ -189,6 +189,41 @@ for a in [x for x in actores if not x["comunidad"]]:
     historial.append(dict(nombre=a["nombre"], fecha=ultima, reunion="Actualización del mapeo", comunidad="",
                           postura=a["postura"], influencia=a["influencia"], evidencia=ev))
 
+# --- actores del proceso de servidumbre y de la empresa comunal del caserio (sin azar, para la pestaña
+#     "Riesgos y decisiones"): docentes opositores, padres de familia, UGEL y dos empresas comunales
+pres_pa = P["C.C. Pucará Alto"]
+NUEVOS = [  # nombre, tipo, cargo, organizacion, comunidad, postura inicial, postura actual, influencia, evidencia
+    ("Prof. Teodoro Llamocca", "Organización de base", "Secretario general de la base docente",
+     "Base docente distrital de Pucará", "C.C. Pucará Alto", -1, -2, 4,
+     "Lidera en Radio Sonqo el rechazo a la servidumbre del acceso norte"),
+    ("APAFA I.E. Pucará", "Organización de base", "Asociación de padres de familia", "I.E. Integrado Pucará",
+     "C.C. Pucará Alto", 0, -1, 3, "Teme el paso de volquetes frente al colegio"),
+    ("UGEL Aymaraes", "Estado", "Dirección de la UGEL", "UGEL", "", 0, 0, 3, "Mantiene su posición"),
+    ("Empresa Comunal Multiservicios Pucará Alto", "Organización de base", "Empresa comunal de la matriz",
+     "Empresa comunal Pucará Alto", "C.C. Pucará Alto", 2, 1, 3, "Molesta por el pedido de cupos del caserío"),
+    ("Empresa Comunal Caserío Ccasapata", "Organización de base", "Empresa comunal en formación (anexo)",
+     "Caserío Ccasapata (anexo de Pucará Alto)", "C.C. Pucará Alto", 0, 0, 2,
+     "Pide ser proveedora directa de transporte"),
+]
+for nom, tipo, cargo, org, com, ini, act, infl, ev in NUEVOS:
+    actor(nom, tipo, cargo, org, com, act, infl)
+    historial.append(dict(nombre=nom, fecha=primera, reunion="Mapeo inicial de actores", comunidad=com,
+                          postura=ini, influencia=infl, evidencia="Primera identificación"))
+    historial.append(dict(nombre=nom, fecha=ultima, reunion="Actualización del mapeo", comunidad=com,
+                          postura=act, influencia=infl, evidencia=ev))
+rel("Prof. Teodoro Llamocca", "APAFA I.E. Pucará", "Influye en", "Convoca a los padres en asamblea escolar")
+rel("Prof. Teodoro Llamocca", radio, "Alianza", "Espacio semanal en el programa matinal")
+rel("Prof. Teodoro Llamocca", frente, "Alianza", "Participa en sus pronunciamientos")
+rel("Prof. Teodoro Llamocca", pres_pa, "Influye en", "Asesora a la junta directiva en las actas")
+rel("UGEL Aymaraes", "Prof. Teodoro Llamocca", "Negocia con", "Relación laboral y de gestión educativa")
+rel(parroquia, "APAFA I.E. Pucará", "Influye en", "El párroco preside la catequesis escolar")
+rel(relacionistas["Pucará"], "UGEL Aymaraes", "Negocia con", "Convenio de mejora de aulas")
+rel(pres_pa, "Empresa Comunal Multiservicios Pucará Alto", "Alianza", "La asamblea controla la empresa comunal")
+rel("Empresa Comunal Caserío Ccasapata", "Empresa Comunal Multiservicios Pucará Alto", "Conflicto",
+    "Disputa por los cupos de transporte para la mina")
+rel(relacionistas["Pucará"], "Empresa Comunal Multiservicios Pucará Alto", "Negocia con", "Contrato de transporte")
+rel(relacionistas["Pucará"], "Empresa Comunal Caserío Ccasapata", "Negocia con", "Evaluación como proveedor")
+
 pd.DataFrame(actores).to_csv(SALIDA / "actores_demo.csv", index=False)
 pd.DataFrame(relaciones).to_csv(SALIDA / "relaciones_demo.csv", index=False)
 pd.DataFrame(historial).sort_values(["fecha", "nombre"]).to_csv(SALIDA / "posturas_demo.csv", index=False)

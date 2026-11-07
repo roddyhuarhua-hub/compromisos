@@ -229,3 +229,52 @@ def test_mapa_base_une_mosaicos(monkeypatch):
     assert tuple(img[300, 300]) == (30, 90, 40)
     monkeypatch.setattr(mapa_base, "_descargar", lambda url: None)  # sin internet: no rompe
     assert mapa_base.mosaico(-73.3, -72.4, -14.4, -13.9) is None
+
+
+def _datos_riesgo():
+    from compromisos import actores as ac, conflictos as cf, riesgos as rg
+    hoy = date(2026, 11, 7)
+    H = ac.normalizar_historial(pd.read_csv(EJEMPLO / "posturas_demo.csv"))
+    A = ac.al_corte(ac.normalizar_actores(pd.read_csv(EJEMPLO / "actores_demo.csv")), H, hoy)
+    return dict(
+        hoy=hoy, H=H, A=A, R=ac.normalizar_relaciones(pd.read_csv(EJEMPLO / "relaciones_demo.csv")),
+        conf=cf.normalizar(pd.read_csv(EJEMPLO / "conflictos_demo.csv")),
+        reg=registro.con_estado(registro.cargar(EJEMPLO / "registro_demo.csv"), hoy),
+        P=rg.normalizar_procesos(pd.read_csv(EJEMPLO / "procesos_demo.csv")),
+        PA=rg.normalizar_partes(pd.read_csv(EJEMPLO / "proceso_actores_demo.csv")),
+        ES=rg.normalizar_escenarios(pd.read_csv(EJEMPLO / "escenarios_demo.csv")),
+        AC=rg.normalizar_acciones(pd.read_csv(EJEMPLO / "acciones_demo.csv")))
+
+
+def test_riesgos_y_escenarios():
+    from compromisos import riesgos as rg
+    d = _datos_riesgo()
+    cart = rg.cartera(d["P"], d["PA"], d["A"], d["H"], d["conf"], d["reg"], d["hoy"])
+    assert cart.iloc[0]["id"] == "P1" and cart.iloc[0]["nivel"] == "Alto"  # servidumbre: la prioridad
+    assert cart.set_index("id").loc["P4", "nivel"] == "Bajo"  # aliado con convenio
+    p1 = d["P"].set_index("id").loc["P1"].copy()
+    p1["id"] = "P1"
+    base = rg.evaluar(p1, d["PA"], d["A"], d["H"], d["conf"], d["reg"], d["hoy"])
+    assert 0 <= base["puntos"] <= 100 and set(base["componentes"]) == set(rg.MAXIMOS)
+    assert base["partes"].iloc[0]["nombre"] in {"Prof. Teodoro Llamocca", "Primitiva Soncco"}
+    mejor = rg.evaluar(p1, d["PA"], d["A"], d["H"], d["conf"], d["reg"], d["hoy"],
+                       {"Prof. Teodoro Llamocca": 1, "APAFA I.E. Pucará": 1, "Primitiva Soncco": 1})
+    peor = rg.evaluar(p1, d["PA"], d["A"], d["H"], d["conf"], d["reg"], d["hoy"], {"Melquiades Mamani": -2})
+    assert mejor["puntos"] < base["puntos"] < peor["puntos"]
+    assert rg.estrategia(-2, 5) == "Atender sus preocupaciones de cerca" and rg.estrategia(2, 5) == "Colaborar"
+    assert "UGEL Aymaraes" in rg.puentes("Prof. Teodoro Llamocca", d["A"], d["R"])
+    sug = rg.sugerir_acciones("P1", base["partes"], d["AC"], "Luis Paredes")
+    assert "Primitiva Soncco" in set(sug["nombre"]) and "Prof. Teodoro Llamocca" not in set(sug["nombre"])
+
+
+def test_laminas_riesgos_4k(monkeypatch):
+    from PIL import Image
+    from compromisos import laminas_riesgos, mapa_base
+    monkeypatch.setattr(mapa_base, "_descargar", lambda url: None)
+    d = _datos_riesgo()
+    p1 = d["P"].iloc[0]
+    lams = laminas_riesgos.laminas_riesgos(p1, d["PA"], d["A"], d["R"], d["H"], d["conf"], d["reg"], d["ES"], d["AC"],
+                                           d["hoy"], "Cliente")
+    assert [n for n, _ in lams][:2] == ["01_riesgo_del_proceso.png", "02_quien_puede_frenar.png"]
+    assert len(lams) == 4
+    assert Image.open(__import__("io").BytesIO(lams[0][1])).size == (3840, 2160)

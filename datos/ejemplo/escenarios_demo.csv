@@ -1,0 +1,21 @@
+proceso_id,escenario,nombre,postura_nueva,motivo
+P1,Mesa técnica con docentes y padres (seguridad vial y aulas),Prof. Teodoro Llamocca,-1,Se atiende su preocupación principal y se le da voz en la mesa
+P1,Mesa técnica con docentes y padres (seguridad vial y aulas),APAFA I.E. Pucará,0,Plan de seguridad vial con desvío fuera del horario escolar
+P1,Mesa técnica con docentes y padres (seguridad vial y aulas),Radio Sonqo,0,Recibe información directa de la mesa
+P1,Mesa técnica con docentes y padres (seguridad vial y aulas),UGEL Aymaraes,1,Participa como garante del convenio de aulas
+P1,Invitar a las rondas a la comisión negociadora,Primitiva Soncco,-1,Se reconoce su rol de control territorial
+P1,Invitar a las rondas a la comisión negociadora,Melquiades Mamani,0,La junta comparte la responsabilidad de la decisión
+P1,Avanzar sin acuerdo con docentes ni rondas,Prof. Teodoro Llamocca,-2,Se siente excluido y convoca a paro
+P1,Avanzar sin acuerdo con docentes ni rondas,APAFA I.E. Pucará,-2,Se suma al paro
+P1,Avanzar sin acuerdo con docentes ni rondas,Radio Sonqo,-2,Difunde la convocatoria al paro
+P1,Avanzar sin acuerdo con docentes ni rondas,Melquiades Mamani,-2,La asamblea le quita respaldo
+P2,Contratar solo a la empresa del caserío,Empresa Comunal Caserío Ccasapata,2,Logra su objetivo
+P2,Contratar solo a la empresa del caserío,Empresa Comunal Multiservicios Pucará Alto,-2,Pierde el contrato
+P2,Contratar solo a la empresa del caserío,Melquiades Mamani,-2,Lo ve como división de la comunidad
+P2,Consorcio de ambas empresas con cupos por padrón comunal,Empresa Comunal Caserío Ccasapata,1,Obtiene cupos proporcionales
+P2,Consorcio de ambas empresas con cupos por padrón comunal,Empresa Comunal Multiservicios Pucará Alto,1,Conserva el contrato y lidera el consorcio
+P2,Consorcio de ambas empresas con cupos por padrón comunal,Melquiades Mamani,0,La asamblea aprueba el reparto
+P2,Consorcio de ambas empresas con cupos por padrón comunal,Prof. Teodoro Llamocca,-1,Reconoce la transparencia del padrón
+P3,Laboratorio acreditado elegido por la comunidad,Feliciana Chalco,-1,Confía más en los resultados
+P3,Laboratorio acreditado elegido por la comunidad,ONG Agua y Territorio,0,Valida la metodología
+P3,Laboratorio acreditado elegido por la comunidad,Julián Pillaca,0,Puede presentar el acuerdo en asamblea
