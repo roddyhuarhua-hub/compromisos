@@ -308,11 +308,12 @@ def figura_actores(p: pd.DataFrame, alto: int = 430) -> go.Figure:
     return _base(fig, alto).update_layout(margin=dict(l=10, r=10, t=10, b=70))
 
 
-def figura_escenarios(resultados: list[tuple[str, int]], base: int, alto: int = 300) -> go.Figure:
-    """Riesgo de cada escenario frente a la situacion actual."""
+def figura_escenarios(resultados: list[tuple[str, int]], base: int, alto: int = 300,
+                      ancho_texto: int = 60) -> go.Figure:
+    """Riesgo de cada escenario frente a la situacion actual (ancho_texto: letras por linea del nombre)."""
     nombres = ["Situación actual"] + [n for n, _ in resultados]
     valores = [base] + [v for _, v in resultados]
-    corto = ["<br>".join(textwrap.wrap(n, 60)) for n in nombres]
+    corto = ["<br>".join(textwrap.wrap(n, ancho_texto)) for n in nombres]
     fig = go.Figure(go.Bar(y=corto[::-1], x=valores[::-1], orientation="h",
                            marker_color=[NIVEL_COLOR[nivel(v)] for v in valores[::-1]],
                            marker_line=dict(color=[TINTA if i == len(valores) - 1 else "white"

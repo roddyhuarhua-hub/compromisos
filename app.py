@@ -40,6 +40,31 @@ LOGO_BLANCO = base64.b64encode((RAIZ / "img" / "logo_confluentia_blanco.png").re
 
 
 CAMPO = st.query_params.get("campo", "") in ("1", "si", "true")  # ?campo=1: vista para celular
+# Celular (Android o iPhone): se detecta por el navegador; ?movil=1 lo fuerza para probar.
+MOVIL = st.query_params.get("movil", "") in ("1", "si", "true") or \
+    any(k in (st.context.headers.get("User-Agent") or "") for k in ("Mobi", "Android", "iPhone"))
+# En celular todos los graficos pasan por la version compacta (se activa por sesion).
+from streamlit.delta_generator import DeltaGenerator
+
+if not getattr(DeltaGenerator, "_compacto", False):
+    _plotly_original = DeltaGenerator.plotly_chart
+
+    def _plotly_movil(self, figure_or_data, *a, **k):
+        if st.session_state.get("_movil"):
+            figure_or_data = visual.compacto(figure_or_data)
+        return _plotly_original(self, figure_or_data, *a, **k)
+
+    DeltaGenerator.plotly_chart = _plotly_movil
+    DeltaGenerator._compacto = True
+    _st_original = st.plotly_chart  # st.plotly_chart ya viene "pegado" al contenedor principal
+
+    def _st_plotly_movil(figure_or_data, *a, **k):
+        if st.session_state.get("_movil"):
+            figure_or_data = visual.compacto(figure_or_data)
+        return _st_original(figure_or_data, *a, **k)
+
+    st.plotly_chart = _st_plotly_movil
+st.session_state["_movil"] = MOVIL
 
 
 def cfg(nombre: str, zoom: bool = False) -> dict:
@@ -827,6 +852,10 @@ with tab_actores:
                             width="stretch", config=cfg("red_actores", zoom=True))
             st.caption("Color: postura hacia la empresa. Tamaño: influencia. Forma: ● comunidad, ■ Estado/autoridad, "
                        "◆ empresa, ▲ ONG/iglesia/medios. Borde oscuro: actor puente. Cada grupo es una comunidad.")
+            if MOVIL:
+                st.info("📱 En el celular: toca un punto para ver quién es, abre el gráfico en pantalla completa "
+                        "(⛶) y usa dos dedos para acercar. Para ver los nombres, elige una comunidad arriba o "
+                        "resalta un actor.")
         with c2:
             st.markdown("#### ⭐ Actores clave de la red")
             st.caption("Intermediación: qué tanto pasa por este actor la comunicación entre los demás "
@@ -1059,6 +1088,7 @@ with tab_conflictos:
                 varios = COMS_C["proyecto"].nunique() > 1
                 st.plotly_chart(conflictos.relacion_compromisos(
                     C, ind_c, desde_c, proyectos=dict(zip(COMS_C["comunidad"], COMS_C["proyecto"])),
+                    ancho_px=370 if MOVIL else 900,
                     colores=portafolio.colores(st.session_state.comunidades)), width="stretch",
                     config=cfg("incumplimiento_y_conflicto"))
                 st.caption(f"Cada punto es una comunidad: compromisos vencidos hoy vs. eventos de conflicto desde "
@@ -1287,7 +1317,8 @@ with tab_riesgos:
                 if res_es:
                     st.markdown("##### Riesgo de cada escenario")
                     st.plotly_chart(riesgos.figura_escenarios(res_es, r0["puntos"],
-                                                              alto=110 + 58 * len(res_es)),
+                                                              alto=110 + (78 if MOVIL else 58) * len(res_es),
+                                                              ancho_texto=24 if MOVIL else 60),
                                     width="stretch", config=cfg("escenarios"))
                 else:
                     st.info("Este proceso aún no tiene escenarios. Arma uno abajo y guárdalo.")
