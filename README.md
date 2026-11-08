@@ -30,7 +30,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 
 | # | Perfil | Lo que más aprendí |
 |---|---|---|
-| 1 | _pendiente_ | _pendiente_ |
+| 1 | [Gerente de relaciones comunitarias, minera con operación y exploración](docs/research/entrevista_1.md) | Un tablero histórico "no es novedad": lo que vale es anticipar ("si haces esto, pasa esto"), entender el interés de fondo de cada actor y ahorrar las 2 a 3 horas semanales de consolidar Excel. Los procesos se frenan por hechos no sociales (denuncias ambientales, comerciales o policiales). |
 | 2 | _pendiente_ | _pendiente_ |
 | 3 | _pendiente_ | _pendiente_ |
 
