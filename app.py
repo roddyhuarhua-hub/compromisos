@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import (actores, anticipar, conflictos, gerencia, ia, modulos, ruta, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
+from compromisos import (actores, anticipar, conflictos, gerencia, ia, modulos, noticias, ruta, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
                          portafolio, presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
@@ -204,6 +204,20 @@ def cargar_claves() -> None:
 
 
 cargar_claves()
+
+
+@st.cache_data(show_spinner="Buscando las noticias del día…", ttl=6 * 3600)
+def noticias_cache(proyecto: str, _dia: str) -> pd.DataFrame:
+    """Noticias del ambito del proyecto; se actualizan solas cada 6 horas (o con el boton)."""
+    nots = noticias.buscar(proyecto, st.session_state.comunidades, st.session_state.get("proyectos"))
+    guardadas = RAIZ / "datos" / "noticias.csv"  # lo que dejo el script diario, si no hay conexion
+    if nots.empty and guardadas.exists():
+        g = pd.read_csv(guardadas)
+        g[["titulo", "medio", "enlace", "tema", "alcance", "tipo_contexto", "lugar"]] = \
+            g[["titulo", "medio", "enlace", "tema", "alcance", "tipo_contexto", "lugar"]].fillna("").astype(str)
+        g["alerta"] = pd.to_numeric(g["alerta"], errors="coerce").fillna(0).astype(int)
+        nots = g[g["proyecto"] == proyecto].assign(fecha=lambda x: pd.to_datetime(x["fecha"]).dt.date)
+    return nots
 
 
 @st.cache_data(show_spinner=False, ttl=7 * 24 * 3600)
@@ -1705,6 +1719,58 @@ if "riesgos" in MODS:
                                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
                         q2.download_button("⬇️ Imágenes PNG (.zip)", lr[1][1], width="stretch", key="dl_rg_zip",
                                            file_name=f"confluentia_riesgo_{pid}_{hoy:%Y%m%d}.zip", mime="application/zip")
+
+        # --- contexto del dia: noticias nacionales, regionales y locales del ambito (entrevista 3)
+        if not P_r.empty:
+            proy_n = pr.get("proyecto") or (PROY if PROY != portafolio.TODOS else
+                                            portafolio.lista(COMUNIDADES)[0] if not COMUNIDADES.empty else "")
+            st.markdown(f"#### 📰 Contexto del día · {proy_n}")
+            nota("Noticias de los últimos 7 días sobre la región, los distritos y las comunidades del proyecto, en "
+                 "diarios nacionales, regionales y locales (Google Noticias y los RSS que agregue el cliente). "
+                 "Cada una se clasifica por tema, alcance y señal de alerta. Las que importan pasan a *Factores "
+                 "externos de riesgo* como **por validar**: no suben el riesgo hasta que el equipo las confirme.")
+            nots = noticias_cache(proy_n, hoy.isoformat())
+            if nots.empty:
+                st.info("No se pudieron traer noticias ahora (sin conexión o sin resultados). Se vuelve a intentar "
+                        "en unas horas, o con el botón.")
+            else:
+                COLOR_TEMA = {"Político y electoral": "#6250d6", "Social y conflictos": "#d03b3b",
+                              "Ambiental": "#1baf7a", "Económico": "#2a78d6", "Otro": "#8a8984"}
+                st.markdown('<div class="kpis">' + "".join(
+                    [kpi("📰 Noticias", f"{len(nots)}", f"{(nots['alcance'] == 'Local').sum()} locales · "
+                         f"{(nots['alcance'] == 'Regional').sum()} regionales", "#1f2a37"),
+                     kpi("🚨 Con señal de alerta", f"{(nots['alerta'] >= 2).sum()}", "paros, denuncias, elecciones…",
+                         "#d03b3b")] +
+                    [kpi(t_, f"{(nots['tema'] == t_).sum()}", "últimos 7 días", COLOR_TEMA[t_])
+                     for t_ in ("Político y electoral", "Social y conflictos", "Ambiental")]) + "</div>",
+                    unsafe_allow_html=True)
+                ver_n = nots.head(8)
+                html_n = []
+                for _, n_ in ver_n.iterrows():
+                    c_ = COLOR_TEMA.get(n_["tema"], "#8a8984")
+                    alerta_n = "🚨 " if n_["alerta"] >= 3 else "⚠️ " if n_["alerta"] == 2 else ""
+                    html_n.append(
+                        f'<div class="alerta" style="--c:{c_}"><div class="t">{alerta_n}'
+                        f'<a href="{n_["enlace"]}" target="_blank" style="color:#1f2a37;text-decoration:none">'
+                        f'{n_["titulo"]}</a></div><div class="m"><span class="badge" style="--c:{c_}">{n_["tema"]}'
+                        f'</span> · {n_["alcance"]}{" (" + n_["lugar"] + ")" if n_["lugar"] else ""} · '
+                        f'{n_["medio"] or "medio"} · {noticias.cuando(n_["fecha"])}</div></div>')
+                st.markdown("".join(html_n), unsafe_allow_html=True)
+                n1, n2 = st.columns(2)
+                alertas_n = nots[nots["alerta"] >= 2]
+                ya = set(st.session_state.contexto["descripcion"]) if "contexto" in st.session_state else set()
+                nuevas_n = alertas_n[~alertas_n["titulo"].isin(ya)]
+                if not nuevas_n.empty and n1.button(f"➕ Pasar {len(nuevas_n)} noticia(s) con alerta a factores "
+                                                    "externos (por validar)", key="nots_a_ctx", width="stretch"):
+                    st.session_state.contexto = anticipar.normalizar_contexto(pd.concat(
+                        [st.session_state.contexto, noticias.a_contexto(nuevas_n, COMUNIDADES)], ignore_index=True),
+                        st.session_state.comunidades)
+                    st.rerun()
+                n2.download_button("⬇️ Noticias (CSV)", nots.to_csv(index=False).encode("utf-8"),
+                                   f"noticias_{hoy:%Y%m%d}.csv", "text/csv", width="stretch")
+            if st.button("🔄 Buscar noticias de nuevo", key="nots_refrescar"):
+                noticias_cache.clear()
+                st.rerun()
 
         with st.expander("🌩️ Factores externos de riesgo: denuncias, cambio de directiva, normas, seguridad"):
             st.caption("Hechos que no son una protesta pero frenan el diálogo: una denuncia ambiental, comercial o "

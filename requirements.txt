@@ -11,3 +11,4 @@ av>=12,<17  # PyAV reciente (19) quitó un parámetro que usa faster-whisper (Ty
 networkx>=3.2
 python-pptx>=1.0
 matplotlib>=3.8
+requests>=2.31

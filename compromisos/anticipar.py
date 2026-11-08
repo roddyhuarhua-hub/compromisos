@@ -26,6 +26,7 @@ TIPOS_CONTEXTO = {
     "Cambio de directiva": ("🗳️", 30, 150),
     "Norma o política en debate": ("📜", 180, 120),
     "Riesgo de seguridad": ("⚠️", 180, 0),
+    "Elecciones o cambio de autoridades": ("🗳️", 60, 180),  # municipales, regionales o comunales
     "Otro detonante": ("📌", 90, 0),
 }
 INTENSIDAD_TXT = {1: "baja", 2: "media", 3: "alta"}

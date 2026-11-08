@@ -385,3 +385,37 @@ def test_ruta_para_bajar_el_riesgo():
     assert rt["mes_acum"].is_monotonic_increasing and rt["como"].str.len().min() > 20
     assert ruta.meses_paso(-2, False, "Agravio antiguo") == 4 and ruta.meses_paso(-1, True) == 1
     assert ruta.figura_ruta(rt, base["puntos"]).data
+
+
+RSS_EJEMPLO = """<?xml version="1.0"?><rss><channel>
+<item><title>Comuneros de Pucará anuncian paro por el agua - Diario Regional</title><link>https://ejemplo.pe/1</link>
+<pubDate>Fri, 06 Nov 2026 10:00:00 GMT</pubDate><source url="https://ejemplo.pe">Diario Regional</source>
+<description>Exigen monitoreo del manante</description></item>
+<item><title>JNE convoca elecciones municipales complementarias en Apurímac - Andina</title><link>https://ejemplo.pe/2</link>
+<pubDate>Thu, 05 Nov 2026 10:00:00 GMT</pubDate><source url="https://andina.pe">Andina</source></item>
+<item><title>Sube el precio del cobre - Medio Nacional</title><link>https://ejemplo.pe/3</link>
+<pubDate>Thu, 05 Nov 2026 10:00:00 GMT</pubDate><source url="https://x.pe">Medio Nacional</source></item>
+<item><title>Noticia vieja - X</title><link>https://ejemplo.pe/4</link><pubDate>Thu, 01 Jan 2026 10:00:00 GMT</pubDate></item>
+</channel></rss>"""
+
+
+def test_noticias_del_dia():
+    from compromisos import anticipar, noticias, portafolio as pf
+    d = pf.cargar_demo(EJEMPLO)
+    uma = "Unidad Minera Andina (Apurímac)"
+    hoy = date(2026, 11, 7)
+    lug = noticias.lugares(uma, d["comunidades"], d["proyectos"])
+    assert lug["region"] == ["Apurímac"] and "Pucará Alto" in lug["comunidades"]
+    assert any("elecciones" in q for q in noticias.consultas(lug))
+    n = noticias.buscar(uma, d["comunidades"], d["proyectos"], hoy=hoy, bajar=lambda u: RSS_EJEMPLO.encode())
+    assert len(n) == 3  # sin repetidas ni viejas
+    paro = n.iloc[0]
+    assert paro["titulo"].startswith("Comuneros de Pucará") and paro["alerta"] == 3 and paro["alcance"] == "Local"
+    assert paro["medio"] == "Diario Regional" and not paro["titulo"].endswith("Diario Regional")
+    elec = n[n["titulo"].str.contains("JNE")].iloc[0]
+    assert elec["tema"] == "Político y electoral" and elec["tipo_contexto"] == "Elecciones o cambio de autoridades"
+    assert n[n["titulo"].str.contains("cobre")].iloc[0]["tema"] == "Económico"
+    ctx = anticipar.normalizar_contexto(noticias.a_contexto(n, d["comunidades"]), d["comunidades"])
+    assert (~ctx["validado"]).all() and ctx["enlace"].str.startswith("https").all()
+    assert anticipar.vigentes(ctx, "C.C. Pucará Alto", uma, hoy).empty  # por validar: no suma al riesgo
+    assert noticias.buscar(uma, d["comunidades"], hoy=hoy, bajar=lambda u: None).empty  # sin internet no rompe
