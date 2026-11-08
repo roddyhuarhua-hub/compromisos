@@ -26,6 +26,9 @@ CONTEXTO_UMA = [
      "El área comercial denunció la entrega de mineral adulterado por un grupo de mineros artesanales", 2),
     ("2026-10-10", UMA, "", "Norma o política en debate",
      "Proyecto de ley sobre servidumbres mineras en debate en el Congreso", 1),
+    # aun sin validar: no sube el riesgo hasta que el equipo lo confirme
+    ("2026-11-05", "", "C.C. Pucará Alto", "Otro detonante",
+     "Una radio local informa que dirigentes de fuera convocarían un paro regional", 2, "Radio local (ejemplo)", False),
 ]
 CONTEXTO_EX = [
     ("2027-02-20", "", "C.C. Sallalli", "Cambio de directiva",
@@ -58,8 +61,11 @@ DEPENDE = {
 
 
 def contexto(filas, ruta):
-    pd.DataFrame(filas, columns=["fecha", "proyecto", "comunidad", "tipo", "descripcion", "intensidad"]) \
-        .assign(fuente="Informe semanal (ejemplo)").to_csv(ruta, index=False)
+    """Cada fila: fecha, proyecto, comunidad, tipo, descripcion, intensidad[, fuente, validado]."""
+    base = ("Informe semanal (ejemplo)", True)
+    filas = [tuple(f) + base[len(f) - 6:] for f in filas]
+    pd.DataFrame(filas, columns=["fecha", "proyecto", "comunidad", "tipo", "descripcion", "intensidad", "fuente",
+                                 "validado"]).assign(enlace="").to_csv(ruta, index=False)
 
 
 def actores(ruta):

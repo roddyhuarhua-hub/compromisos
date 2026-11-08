@@ -330,3 +330,23 @@ def test_anticipar_contexto_jugadas_tendencia():
     t = anticipar.tendencia(rg.evaluar, p1, d["PA"], d["A"], d["H"], d["conf"], bruto, d["hoy"], ctx)
     assert len(t) >= 6 and t.iloc[-1]["fecha"] == d["hoy"] and t.iloc[-1]["puntos"] == con["puntos"]
     assert anticipar.probabilidad(80) == "muy probable" and anticipar.probabilidad(10) == "poco probable"
+
+
+def test_vencidos_por_prioridad_y_validacion():
+    from compromisos import anticipar, gerencia
+    hoy = date(2026, 11, 7)
+    df = registro.con_estado(registro.cargar(EJEMPLO / "registro_demo.csv"), hoy)
+    pr = gerencia.priorizar(df, hoy)
+    assert len(pr) == (df["estado"] == "Vencido").sum() and set(pr["prioridad"]) <= {1, 2, 3}
+    assert list(pr["prioridad"]) == sorted(pr["prioridad"])  # la prioridad 1 primero
+    assert gerencia.prioridad("alto", 10) == 1 and gerencia.prioridad("bajo", 10) == 3
+    assert gerencia.prioridad("bajo", 120) == 2 and gerencia.prioridad("medio", 400) == 2  # P1 solo lo critico
+    p1 = pr[pr["prioridad"] == 1].iloc[0]
+    assert p1["atender_antes"] == hoy + __import__("datetime").timedelta(days=7)
+    assert "P1" in gerencia.tabla_html(pr) and gerencia.figura_vencidos(pr, hoy).data
+    # lo que no esta validado no sube el riesgo
+    ctx = anticipar.normalizar_contexto(pd.DataFrame([
+        dict(fecha="2026-11-01", comunidad="X", tipo="Denuncia policial", descripcion="a", validado=False)]))
+    assert anticipar.por_validar(ctx) == 1 and anticipar.vigentes(ctx, "X", "", hoy).empty
+    ctx.loc[0, "validado"] = True
+    assert len(anticipar.vigentes(ctx, "X", "", hoy)) == 1

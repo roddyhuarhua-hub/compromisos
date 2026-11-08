@@ -1,4 +1,4 @@
-fecha,proyecto,comunidad,tipo,descripcion,intensidad,fuente
-2027-02-20,,C.C. Sallalli,Cambio de directiva,Renovación de la directiva comunal; la nueva junta decidirá el acuerdo de uso superficial,2,Informe semanal (ejemplo)
-2026-10-02,,C.C. Huayrapata,Riesgo de seguridad,Las rondas restringen el paso del personal de la empresa por la ruta principal,3,Informe semanal (ejemplo)
-2026-08-30,,C.C. Quinuamayo,Denuncia policial,Denuncia policial tras un enfrentamiento en el acceso a las plataformas,2,Informe semanal (ejemplo)
+fecha,proyecto,comunidad,tipo,descripcion,intensidad,fuente,validado,enlace
+2027-02-20,,C.C. Sallalli,Cambio de directiva,Renovación de la directiva comunal; la nueva junta decidirá el acuerdo de uso superficial,2,Informe semanal (ejemplo),True,
+2026-10-02,,C.C. Huayrapata,Riesgo de seguridad,Las rondas restringen el paso del personal de la empresa por la ruta principal,3,Informe semanal (ejemplo),True,
+2026-08-30,,C.C. Quinuamayo,Denuncia policial,Denuncia policial tras un enfrentamiento en el acceso a las plataformas,2,Informe semanal (ejemplo),True,

@@ -1,5 +1,6 @@
-fecha,proyecto,comunidad,tipo,descripcion,intensidad,fuente
-2026-10-28,,C.C. Pucará Alto,Denuncia ambiental,Medio ambiente denunció a un comunero por arrojar desmonte al río; la comunidad envió una carta de reclamo y suspendió las encuestas del estudio ambiental,3,Informe semanal (ejemplo)
-2027-03-15,,C.C. Pucará Alto,Cambio de directiva,Elección de la nueva junta directiva comunal: la actual no quiere decidir la servidumbre antes,2,Informe semanal (ejemplo)
-2026-09-20,,C.C. Llacctapampa,Denuncia comercial,El área comercial denunció la entrega de mineral adulterado por un grupo de mineros artesanales,2,Informe semanal (ejemplo)
-2026-10-10,Unidad Minera Andina (Apurímac),,Norma o política en debate,Proyecto de ley sobre servidumbres mineras en debate en el Congreso,1,Informe semanal (ejemplo)
+fecha,proyecto,comunidad,tipo,descripcion,intensidad,fuente,validado,enlace
+2026-10-28,,C.C. Pucará Alto,Denuncia ambiental,Medio ambiente denunció a un comunero por arrojar desmonte al río; la comunidad envió una carta de reclamo y suspendió las encuestas del estudio ambiental,3,Informe semanal (ejemplo),True,
+2027-03-15,,C.C. Pucará Alto,Cambio de directiva,Elección de la nueva junta directiva comunal: la actual no quiere decidir la servidumbre antes,2,Informe semanal (ejemplo),True,
+2026-09-20,,C.C. Llacctapampa,Denuncia comercial,El área comercial denunció la entrega de mineral adulterado por un grupo de mineros artesanales,2,Informe semanal (ejemplo),True,
+2026-10-10,Unidad Minera Andina (Apurímac),,Norma o política en debate,Proyecto de ley sobre servidumbres mineras en debate en el Congreso,1,Informe semanal (ejemplo),True,
+2026-11-05,,C.C. Pucará Alto,Otro detonante,Una radio local informa que dirigentes de fuera convocarían un paro regional,2,Radio local (ejemplo),False,

@@ -17,7 +17,7 @@ import plotly.graph_objects as go
 from . import actores as ac
 from . import registro
 
-COL_CONTEXTO = ["fecha", "proyecto", "comunidad", "tipo", "descripcion", "intensidad", "fuente"]
+COL_CONTEXTO = ["fecha", "proyecto", "comunidad", "tipo", "descripcion", "intensidad", "fuente", "enlace", "validado"]
 # tipo -> (icono, dias hacia atras en que cuenta, dias hacia adelante en que cuenta)
 TIPOS_CONTEXTO = {
     "Denuncia ambiental": ("🌊", 90, 0),
@@ -39,7 +39,10 @@ def normalizar_contexto(df: pd.DataFrame, comunidades: pd.DataFrame | None = Non
             df[c] = None
     df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce").dt.date
     df["intensidad"] = pd.to_numeric(df["intensidad"], errors="coerce").fillna(2).clip(1, 3).astype(int)
-    for c in ("proyecto", "comunidad", "tipo", "descripcion", "fuente"):
+    # validado: lo confirmo el equipo (entrevista 3: "tiene que ser informacion validada"). Sin la columna, se
+    # asume validado para no perder datos antiguos.
+    df["validado"] = df["validado"].map(lambda v: str(v).strip().lower() not in ("false", "0", "no", "falso"))
+    for c in ("proyecto", "comunidad", "tipo", "descripcion", "fuente", "enlace"):
         df[c] = df[c].fillna("").astype(str).str.strip()
     df.loc[~df["tipo"].isin(TIPOS_CONTEXTO), "tipo"] = "Otro detonante"
     if comunidades is not None and not comunidades.empty and "proyecto" in comunidades:
@@ -55,6 +58,8 @@ def vigentes(contexto: pd.DataFrame | None, comunidad: str, proyecto: str, hoy: 
     la ventana de cada tipo (una denuncia pesa 3 meses; un cambio de directiva pesa desde 5 meses antes)."""
     if contexto is None or contexto.empty:
         return pd.DataFrame(columns=COL_CONTEXTO)
+    if "validado" in contexto:  # lo que aun no se confirma no sube el riesgo
+        contexto = contexto[contexto["validado"].astype(bool)]
     if not proyecto:  # el proyecto del proceso se deduce de los hechos registrados en su comunidad
         de_com = contexto.loc[(contexto["comunidad"] == comunidad) & (contexto["proyecto"] != ""), "proyecto"]
         proyecto = de_com.iloc[0] if not de_com.empty else ""
@@ -81,6 +86,10 @@ def factor_contexto(contexto: pd.DataFrame | None, comunidad: str, proyecto: str
         cuando = (f"en {(r['fecha'] - hoy).days} días" if r["fecha"] > hoy else f"el {r['fecha']:%d/%m}")
         partes.append(f"{r['tipo'].lower()} {cuando}")
     return pts, f"{len(v)} hecho{'s' * (len(v) != 1)} que pueden frenar el diálogo: " + "; ".join(partes)
+
+
+def por_validar(contexto: pd.DataFrame | None) -> int:
+    return 0 if contexto is None or contexto.empty or "validado" not in contexto else int((~contexto["validado"]).sum())
 
 
 # ------------------------------------------------------------------ si haces esto, pasa esto

@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import (actores, anticipar, conflictos, ia, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
+from compromisos import (actores, anticipar, conflictos, gerencia, ia, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
                          portafolio, presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
@@ -273,6 +273,8 @@ with st.sidebar:
     if not CAMPO:
         st.link_button("📱 Modo campo (celular)", "?campo=1", width="stretch",
                        help="Solo el formulario para subir reuniones, asambleas y actas, pensado para el celular.")
+    with st.expander("📖 Glosario: qué significa cada término"):
+        st.markdown("\n".join(f"- **{t}.** {d}" for t, d in gerencia.GLOSARIO.items()))
     st.divider()
     st.markdown("**Registro**")
     subido = st.file_uploader("Cargar registro (CSV)", type=["csv"], key="csv_registro")
@@ -752,27 +754,44 @@ with tab_tablero:
         # --- alertas + estados
         c3, c4 = st.columns([1.2, 1])
         with c3:
-            st.markdown("#### 🔔 Alertas: atender primero")
-            alertas = df[df["estado"].isin(["Vencido", "Por vencer"])].copy()
-            alertas["peso"] = alertas["riesgo_conflicto"].map(visual.PESO_RIESGO)
-            alertas["cercania"] = alertas["dias_restantes"].abs()  # lo recien vencido o por vencer primero
-            alertas = alertas.sort_values(["peso", "cercania"], ascending=[False, True]).head(6)
+            st.markdown("#### 🔔 Vencidos: atender primero")
+            pr_v = gerencia.priorizar(df, hoy)
+            n_pv = int((df["estado"] == "Por vencer").sum())
+            leyenda = " ".join(f'<span class="badge" style="--c:{gerencia.PRIORIDAD_COLOR[p_]}">P{p_} · '
+                               f'{(pr_v["prioridad"] == p_).sum()}</span>' for p_ in (1, 2, 3))
+            st.markdown(f'<div style="margin:-4px 0 8px">{leyenda}</div>', unsafe_allow_html=True)
             html = []
-            for _, r in alertas.iterrows():
-                col = COLOR_ESTADO[r["estado"]]
-                dias = int(r["dias_restantes"])
-                cuando = f"{-dias} días de atraso" if dias < 0 else f"vence en {dias} días"
+            for _, r in pr_v.head(6).iterrows():
+                col = gerencia.PRIORIDAD_COLOR[r["prioridad"]]
                 html.append(
-                    f'<div class="alerta" style="--c:{col}"><div class="t">{ICONO_ESTADO[r["estado"]]} {r["descripcion"]}</div>'
+                    f'<div class="alerta" style="--c:{col}"><div class="t">P{r["prioridad"]} · {r["descripcion"]}</div>'
                     f'<div class="m">{r["comunidad"]} · {r["responsable"]} ({r["responsable_detalle"] or "-"}) · '
-                    f'<b>{cuando}</b> · riesgo {r["riesgo_conflicto"]}</div>'
+                    f'{r["dias_atraso"]} días de atraso · riesgo {r["riesgo_conflicto"]}</div>'
+                    f'<div class="m" style="color:{col}"><b>Atender antes del {r["atender_antes"]:%d/%m}</b> '
+                    f'({gerencia.PLAZO_DIAS[r["prioridad"]]} días)</div>'
                     + (f'<div class="m">⏳ Espera de la otra parte: {r["depende_de"]}</div>' if r["depende_de"] else "")
                     + '</div>')
-            st.markdown("".join(html) or "Sin alertas 🎉", unsafe_allow_html=True)
+            st.markdown("".join(html) or "Sin vencidos 🎉", unsafe_allow_html=True)
+            if len(pr_v) > 6:
+                st.caption(f"Y {len(pr_v) - 6} vencidos más en la tabla de abajo.")
+            if n_pv:
+                st.caption(f"🟡 Además, {n_pv} compromiso{'s' * (n_pv != 1)} por vencer en los próximos {registro.DIAS_ALERTA} días: "
+                           "todavía están en plazo (ver el calendario).")
         with c4:
             st.markdown("#### Estado de los compromisos")
             st.plotly_chart(visual.dona_estados(df, registro.ORDEN_ESTADO), width="stretch",
                             config=cfg("estados"))
+
+        # --- vencidos por prioridad: mismos colores que las alertas (entrevista 3)
+        if not pr_v.empty:
+            v1, v2 = st.columns([1.6, 1])
+            with v1:
+                st.plotly_chart(gerencia.figura_vencidos(pr_v, hoy), width="stretch", config=cfg("vencidos_prioridad"))
+            with v2:
+                st.markdown("##### Vencidos por comunidad y prioridad")
+                st.markdown(gerencia.tabla_html(pr_v), unsafe_allow_html=True)
+                st.caption("P1: riesgo alto, puede parar el proyecto (atender en 7 días). P2: riesgo medio (15 "
+                           "días). P3: riesgo bajo (30 días); sube a P2 si lleva más de 3 meses vencido.")
 
         # --- calendario
         st.plotly_chart(visual.calendario(df, hoy), width="stretch", config=cfg("calendario_vencimientos"))
@@ -1565,9 +1584,15 @@ with tab_riesgos:
         st.caption("Hechos que no son una protesta pero frenan el diálogo: una denuncia ambiental, comercial o "
                    "policial contra un comunero, la elección de una nueva directiva, una norma en debate o un riesgo "
                    "de seguridad para el personal. Una denuncia pesa 3 meses; un cambio de directiva, desde 5 meses "
-                   "antes. Deja la comunidad vacía si afecta a todo el proyecto.")
+                   "antes. Deja la comunidad vacía si afecta a todo el proyecto. Puedes pegar el **enlace de la noticia** "
+                   "local o regional. Solo los hechos **validados** por el equipo suben el riesgo: lo que llega por "
+                   "rumor o por una sola fuente queda *por validar* hasta confirmarlo.")
         CTX_v = V.get("contexto")
         CTX_v = CTX_v if CTX_v is not None else anticipar.normalizar_contexto(pd.DataFrame())
+        n_pv = anticipar.por_validar(CTX_v)
+        if n_pv:
+            st.warning(f"{n_pv} hecho{'s' * (n_pv != 1)} por validar: no cuenta{'n' * (n_pv != 1)} en el riesgo "
+                       "hasta que alguien del equipo lo confirme.")
         CTX_ed = st.data_editor(CTX_v.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch",
                                 key="ed_contexto", column_config={
                                     "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
@@ -1578,7 +1603,10 @@ with tab_riesgos:
                                                                              options=list(anticipar.TIPOS_CONTEXTO)),
                                     "descripcion": st.column_config.TextColumn("Qué pasó", width="large"),
                                     "intensidad": st.column_config.NumberColumn("Intensidad (1-3)", min_value=1,
-                                                                                max_value=3)})
+                                                                                max_value=3),
+                                    "fuente": st.column_config.TextColumn("Fuente"),
+                                    "enlace": st.column_config.LinkColumn("Enlace (noticia)", display_text="Abrir"),
+                                    "validado": st.column_config.CheckboxColumn("Validado", default=False)})
         if st.button("Guardar detonantes y contexto", key="g_contexto"):
             st.session_state.contexto = anticipar.normalizar_contexto(
                 portafolio.reemplazar(st.session_state.contexto, CTX_v, CTX_ed), st.session_state.comunidades)
