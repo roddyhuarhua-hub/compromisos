@@ -1,47 +1,47 @@
-nombre,tipo,cargo,organizacion,comunidad,postura,influencia,fuente
-Ricardo Valdivia,Empresa,Gerente de Relaciones Comunitarias,Minera Andina S.A.C.,,2,4,sintético
-Luis Paredes,Empresa,Superintendente de RR.CC. zona norte,Minera Andina S.A.C.,,2,4,sintético
-Carla Mendoza,Empresa,Relacionista comunitaria zona oeste,Minera Andina S.A.C.,,2,3,sintético
-Óscar Rivas,Empresa,Relacionista comunitario zona sur,Minera Andina S.A.C.,,2,3,sintético
-Alcalde de Pucará,Autoridad local,Alcalde distrital,Municipalidad Distrital de Pucará,,-1,4,sintético
-Alcalde de Chalhuanca,Autoridad local,Alcalde distrital,Municipalidad Distrital de Chalhuanca,,0,4,sintético
-Alcalde de Antabamba,Autoridad local,Alcalde distrital,Municipalidad Distrital de Antabamba,,1,4,sintético
-Autoridad Local del Agua,Estado,,ANA,,0,3,sintético
-OEFA - Oficina Desconcentrada,Estado,,OEFA,,0,3,sintético
-Defensoría del Pueblo,Estado,Oficina defensorial,Defensoría del Pueblo,,0,4,sintético
-Gobierno Regional,Estado,Gerencia de Recursos Naturales,Gobierno Regional,,1,3,sintético
-Frente de Defensa del Agua y la Vida,Organización de base,Coordinadora interdistrital,Frente de Defensa,,-2,5,sintético
-ONG Agua y Territorio,ONG / Iglesia,Equipo legal,ONG Agua y Territorio,,-1,3,sintético
-Parroquia San Pedro,ONG / Iglesia,Párroco,Iglesia católica,,0,3,sintético
-Radio Sonqo,Medio de comunicación,Programa matinal en quechua,Radio local,,-1,3,sintético
-Melquiades Mamani,Dirigente comunal,Presidente comunal,Junta directiva comunal Pucará Alto,C.C. Pucará Alto,-1,5,sintético
-Benedicta Ccoyllo,Organización de base,Presidenta del comité de regantes,Comité de regantes Pucará Alto,C.C. Pucará Alto,0,4,sintético
-Primitiva Soncco,Organización de base,Presidente de rondas campesinas,Rondas campesinas Pucará Alto,C.C. Pucará Alto,-2,4,sintético
-Severino Soncco,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Pucará Alto,C.C. Pucará Alto,-2,2,sintético
-Julián Pillaca,Dirigente comunal,Presidente comunal,Junta directiva comunal Llacctapampa,C.C. Llacctapampa,-1,5,sintético
-Feliciana Chalco,Organización de base,Presidenta del comité de regantes,Comité de regantes Llacctapampa,C.C. Llacctapampa,-2,4,sintético
-Justina Yupanqui,Organización de base,Presidente de rondas campesinas,Rondas campesinas Llacctapampa,C.C. Llacctapampa,-1,4,sintético
-Melquiades Huamaní,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Llacctapampa,C.C. Llacctapampa,0,2,sintético
-Anselmo Soncco,Dirigente comunal,Presidente comunal,Junta directiva comunal Huancarani,C.C. Huancarani,1,5,sintético
-Justina Cusihuamán,Organización de base,Presidenta del comité de regantes,Comité de regantes Huancarani,C.C. Huancarani,1,4,sintético
-Eusebio Ayquipa,Organización de base,Presidente de rondas campesinas,Rondas campesinas Huancarani,C.C. Huancarani,2,4,sintético
-Agripina Anccasi,Dirigente comunal,Presidente comunal,Junta directiva comunal Santa Rosa de Ccochapampa,C.C. Santa Rosa de Ccochapampa,-1,5,sintético
-Melquiades Taipe,Organización de base,Presidenta del comité de regantes,Comité de regantes Santa Rosa de Ccochapampa,C.C. Santa Rosa de Ccochapampa,0,4,sintético
-Natividad Ayquipa,Organización de base,Presidente de rondas campesinas,Rondas campesinas Santa Rosa de Ccochapampa,C.C. Santa Rosa de Ccochapampa,-1,4,sintético
-Agripina Quispe,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Santa Rosa de Ccochapampa,C.C. Santa Rosa de Ccochapampa,0,2,sintético
-Feliciana Mamani,Dirigente comunal,Presidente comunal,Junta directiva comunal Antaccasa,C.C. Antaccasa,1,5,sintético
-Policarpo Anccasi,Organización de base,Presidenta del comité de regantes,Comité de regantes Antaccasa,C.C. Antaccasa,1,4,sintético
-Gregoria Mamani,Organización de base,Presidente de rondas campesinas,Rondas campesinas Antaccasa,C.C. Antaccasa,0,4,sintético
-Eusebio Pillaca,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Antaccasa,C.C. Antaccasa,1,2,sintético
-Epifanía Ccoyllo,Dirigente comunal,Presidente comunal,Junta directiva comunal Qollpa Ccasa,C.C. Qollpa Ccasa,0,5,sintético
-Florencia Yupanqui,Organización de base,Presidenta del comité de regantes,Comité de regantes Qollpa Ccasa,C.C. Qollpa Ccasa,0,4,sintético
-Primitiva Puma,Organización de base,Presidente de rondas campesinas,Rondas campesinas Qollpa Ccasa,C.C. Qollpa Ccasa,-1,4,sintético
-Eusebio Huarcaya,Dirigente comunal,Presidente comunal,Junta directiva comunal Tambo Real,C.C. Tambo Real,0,5,sintético
-Fortunato Taipe,Organización de base,Presidenta del comité de regantes,Comité de regantes Tambo Real,C.C. Tambo Real,1,4,sintético
-Policarpo Pillaca,Organización de base,Presidente de rondas campesinas,Rondas campesinas Tambo Real,C.C. Tambo Real,0,4,sintético
-Primitiva Ccoyllo,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Tambo Real,C.C. Tambo Real,0,2,sintético
-Prof. Teodoro Llamocca,Organización de base,Secretario general de la base docente,Base docente distrital de Pucará,C.C. Pucará Alto,-2,4,sintético
-APAFA I.E. Pucará,Organización de base,Asociación de padres de familia,I.E. Integrado Pucará,C.C. Pucará Alto,-1,3,sintético
-UGEL Aymaraes,Estado,Dirección de la UGEL,UGEL,,0,3,sintético
-Empresa Comunal Multiservicios Pucará Alto,Organización de base,Empresa comunal de la matriz,Empresa comunal Pucará Alto,C.C. Pucará Alto,1,3,sintético
-Empresa Comunal Caserío Ccasapata,Organización de base,Empresa comunal en formación (anexo),Caserío Ccasapata (anexo de Pucará Alto),C.C. Pucará Alto,0,2,sintético
+nombre,tipo,cargo,organizacion,comunidad,postura,influencia,fuente,postura_publica,interes_fondo
+Ricardo Valdivia,Empresa,Gerente de Relaciones Comunitarias,Minera Andina S.A.C.,,2,4,sintético,,
+Luis Paredes,Empresa,Superintendente de RR.CC. zona norte,Minera Andina S.A.C.,,2,4,sintético,,
+Carla Mendoza,Empresa,Relacionista comunitaria zona oeste,Minera Andina S.A.C.,,2,3,sintético,,
+Óscar Rivas,Empresa,Relacionista comunitario zona sur,Minera Andina S.A.C.,,2,3,sintético,,
+Alcalde de Pucará,Autoridad local,Alcalde distrital,Municipalidad Distrital de Pucará,,-1,4,sintético,,
+Alcalde de Chalhuanca,Autoridad local,Alcalde distrital,Municipalidad Distrital de Chalhuanca,,0,4,sintético,,
+Alcalde de Antabamba,Autoridad local,Alcalde distrital,Municipalidad Distrital de Antabamba,,1,4,sintético,,
+Autoridad Local del Agua,Estado,,ANA,,0,3,sintético,,
+OEFA - Oficina Desconcentrada,Estado,,OEFA,,0,3,sintético,,
+Defensoría del Pueblo,Estado,Oficina defensorial,Defensoría del Pueblo,,0,4,sintético,,
+Gobierno Regional,Estado,Gerencia de Recursos Naturales,Gobierno Regional,,1,3,sintético,,
+Frente de Defensa del Agua y la Vida,Organización de base,Coordinadora interdistrital,Frente de Defensa,,-2,5,sintético,,
+ONG Agua y Territorio,ONG / Iglesia,Equipo legal,ONG Agua y Territorio,,-1,3,sintético,,
+Parroquia San Pedro,ONG / Iglesia,Párroco,Iglesia católica,,0,3,sintético,,
+Radio Sonqo,Medio de comunicación,Programa matinal en quechua,Radio local,,-1,3,sintético,,
+Melquiades Mamani,Dirigente comunal,Presidente comunal,Junta directiva comunal Pucará Alto,C.C. Pucará Alto,-1,5,sintético,,Busca la reelección en marzo: necesita mostrar un logro visible (agua o empleo) antes de comprometerse con la servidumbre
+Benedicta Ccoyllo,Organización de base,Presidenta del comité de regantes,Comité de regantes Pucará Alto,C.C. Pucará Alto,0,4,sintético,-1,"En privado acepta la servidumbre si se respeta su parcela, pero en asamblea no se atreve a contradecir al Frente de Defensa"
+Primitiva Soncco,Organización de base,Presidente de rondas campesinas,Rondas campesinas Pucará Alto,C.C. Pucará Alto,-2,4,sintético,,Las rondas reclaman ser parte de la comisión negociadora
+Severino Soncco,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Pucará Alto,C.C. Pucará Alto,-2,2,sintético,,
+Julián Pillaca,Dirigente comunal,Presidente comunal,Junta directiva comunal Llacctapampa,C.C. Llacctapampa,-1,5,sintético,,
+Feliciana Chalco,Organización de base,Presidenta del comité de regantes,Comité de regantes Llacctapampa,C.C. Llacctapampa,-2,4,sintético,,
+Justina Yupanqui,Organización de base,Presidente de rondas campesinas,Rondas campesinas Llacctapampa,C.C. Llacctapampa,-1,4,sintético,,
+Melquiades Huamaní,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Llacctapampa,C.C. Llacctapampa,0,2,sintético,,
+Anselmo Soncco,Dirigente comunal,Presidente comunal,Junta directiva comunal Huancarani,C.C. Huancarani,1,5,sintético,,
+Justina Cusihuamán,Organización de base,Presidenta del comité de regantes,Comité de regantes Huancarani,C.C. Huancarani,1,4,sintético,,
+Eusebio Ayquipa,Organización de base,Presidente de rondas campesinas,Rondas campesinas Huancarani,C.C. Huancarani,2,4,sintético,,
+Agripina Anccasi,Dirigente comunal,Presidente comunal,Junta directiva comunal Santa Rosa de Ccochapampa,C.C. Santa Rosa de Ccochapampa,-1,5,sintético,,
+Melquiades Taipe,Organización de base,Presidenta del comité de regantes,Comité de regantes Santa Rosa de Ccochapampa,C.C. Santa Rosa de Ccochapampa,0,4,sintético,,
+Natividad Ayquipa,Organización de base,Presidente de rondas campesinas,Rondas campesinas Santa Rosa de Ccochapampa,C.C. Santa Rosa de Ccochapampa,-1,4,sintético,,
+Agripina Quispe,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Santa Rosa de Ccochapampa,C.C. Santa Rosa de Ccochapampa,0,2,sintético,,
+Feliciana Mamani,Dirigente comunal,Presidente comunal,Junta directiva comunal Antaccasa,C.C. Antaccasa,1,5,sintético,,
+Policarpo Anccasi,Organización de base,Presidenta del comité de regantes,Comité de regantes Antaccasa,C.C. Antaccasa,1,4,sintético,,
+Gregoria Mamani,Organización de base,Presidente de rondas campesinas,Rondas campesinas Antaccasa,C.C. Antaccasa,0,4,sintético,,
+Eusebio Pillaca,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Antaccasa,C.C. Antaccasa,1,2,sintético,,
+Epifanía Ccoyllo,Dirigente comunal,Presidente comunal,Junta directiva comunal Qollpa Ccasa,C.C. Qollpa Ccasa,0,5,sintético,,
+Florencia Yupanqui,Organización de base,Presidenta del comité de regantes,Comité de regantes Qollpa Ccasa,C.C. Qollpa Ccasa,0,4,sintético,,
+Primitiva Puma,Organización de base,Presidente de rondas campesinas,Rondas campesinas Qollpa Ccasa,C.C. Qollpa Ccasa,-1,4,sintético,,
+Eusebio Huarcaya,Dirigente comunal,Presidente comunal,Junta directiva comunal Tambo Real,C.C. Tambo Real,0,5,sintético,,
+Fortunato Taipe,Organización de base,Presidenta del comité de regantes,Comité de regantes Tambo Real,C.C. Tambo Real,1,4,sintético,,
+Policarpo Pillaca,Organización de base,Presidente de rondas campesinas,Rondas campesinas Tambo Real,C.C. Tambo Real,0,4,sintético,,
+Primitiva Ccoyllo,Organización de base,Presidenta del Vaso de Leche,Comité del Vaso de Leche Tambo Real,C.C. Tambo Real,0,2,sintético,,
+Prof. Teodoro Llamocca,Organización de base,Secretario general de la base docente,Base docente distrital de Pucará,C.C. Pucará Alto,-2,4,sintético,,Agravio antiguo: en una gestión anterior la empresa ofreció aulas que nunca llegaron; es un tema de reconocimiento más que de dinero
+APAFA I.E. Pucará,Organización de base,Asociación de padres de familia,I.E. Integrado Pucará,C.C. Pucará Alto,-1,3,sintético,,
+UGEL Aymaraes,Estado,Dirección de la UGEL,UGEL,,0,3,sintético,,
+Empresa Comunal Multiservicios Pucará Alto,Organización de base,Empresa comunal de la matriz,Empresa comunal Pucará Alto,C.C. Pucará Alto,1,3,sintético,,
+Empresa Comunal Caserío Ccasapata,Organización de base,Empresa comunal en formación (anexo),Caserío Ccasapata (anexo de Pucará Alto),C.C. Pucará Alto,0,2,sintético,,

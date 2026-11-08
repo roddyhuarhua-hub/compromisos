@@ -13,6 +13,7 @@ COLUMNAS = [
     "descripcion", "responsable", "responsable_detalle", "beneficiario", "tema",
     "fecha_limite", "riesgo_conflicto", "cumplido", "fecha_cumplimiento",
     "cita_textual", "fuente",
+    "depende_de",  # si el compromiso espera una entrega de la otra parte (estudio, permiso, padron)
 ]
 
 DIAS_ALERTA = 30

@@ -15,6 +15,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from . import actores as ac
+from . import anticipar
 from .conflictos import DE_FUERZA
 
 COL_PROCESOS = ["id", "proceso", "tipo", "comunidad", "hito", "fecha_limite", "impacto", "si_se_paraliza",
@@ -29,9 +30,10 @@ ESTRATEGIAS = ["Atender sus preocupaciones de cerca", "Involucrar y consultar", 
 ESTADOS_ACCION = ["Pendiente", "En curso", "Hecha"]
 NIVEL_COLOR = {"Alto": "#d03b3b", "Medio": "#eda100", "Bajo": "#1baf7a"}
 TINTA, TINTA_2, BORDE = "#1f2a37", "#5b6675", "#e3e7eb"
-# puntaje maximo de cada componente (suman 100)
-MAXIMOS = {"Oposición con poder": 40, "Precedentes de conflicto": 20, "Compromisos vencidos": 20,
-           "Posturas que empeoran": 20}
+# puntaje maximo de cada componente (suman 100). "Detonantes y contexto" se agrego tras las entrevistas:
+# denuncias ambientales, comerciales o policiales, cambio de directiva, normas en debate, seguridad.
+MAXIMOS = {"Oposición con poder": 35, "Precedentes de conflicto": 15, "Compromisos vencidos": 15,
+           "Posturas que empeoran": 15, "Detonantes y contexto": 20}
 
 
 # ------------------------------------------------------------------ datos
@@ -86,14 +88,21 @@ def normalizar_acciones(df: pd.DataFrame) -> pd.DataFrame:
 def partes_con_postura(partes: pd.DataFrame, A: pd.DataFrame, cambios_postura: dict | None = None) -> pd.DataFrame:
     """Une los actores del proceso con su postura e influencia actuales (del mapa de actores)."""
     p = partes.copy()
-    info = A.set_index(A["nombre"].map(ac.clave))[["postura", "influencia", "cargo", "tipo", "comunidad"]]
+    extra = [c for c in ("postura_publica", "interes_fondo") if c in A]
+    info = A.set_index(A["nombre"].map(ac.clave))[["postura", "influencia", "cargo", "tipo", "comunidad"] + extra]
     p = p.join(info, on=p["nombre"].map(ac.clave).rename("_k")) if not p.empty else p
-    for c, v in (("postura", 0), ("influencia", 2), ("cargo", ""), ("tipo", ""), ("comunidad", "")):
+    for c, v in (("postura", 0), ("influencia", 2), ("cargo", ""), ("tipo", ""), ("comunidad", ""),
+                 ("postura_publica", ""), ("interes_fondo", "")):
         if c not in p:
             p[c] = v
         p[c] = p[c].fillna(v)
     p["postura"] = p["postura"].astype(int)
     p["influencia"] = p["influencia"].astype(int)
+    # Lo que dice en privado puede no ser lo que dice en asamblea: para el riesgo pesa lo publico.
+    p["postura_privada"] = p["postura"]
+    publica = pd.to_numeric(p["postura_publica"], errors="coerce")
+    p["doble_discurso"] = publica.notna() & (publica != p["postura"])
+    p["postura"] = publica.fillna(p["postura"]).clip(-2, 2).astype(int)
     p["postura_antes"] = p["postura"]
     if cambios_postura:
         nuevo = p["nombre"].map(cambios_postura)
@@ -123,9 +132,11 @@ def nivel(puntos: float) -> str:
 
 
 def evaluar(proceso: pd.Series, partes: pd.DataFrame, A: pd.DataFrame, H: pd.DataFrame, conf: pd.DataFrame,
-            reg: pd.DataFrame, hoy: date, cambios_postura: dict | None = None, meses: int = 6) -> dict:
-    """Riesgo de paralizacion (0-100) del proceso con sus cuatro componentes y el porque de cada uno.
-    reg debe venir con la columna 'estado' (registro.con_estado)."""
+            reg: pd.DataFrame, hoy: date, cambios_postura: dict | None = None, meses: int = 6,
+            contexto: pd.DataFrame | None = None) -> dict:
+    """Riesgo de paralizacion (0-100) del proceso con sus cinco componentes y el porque de cada uno.
+    reg debe venir con la columna 'estado' (registro.con_estado). contexto: detonantes y hechos de
+    contexto (anticipar.normalizar_contexto)."""
     com = proceso["comunidad"]
     p = partes_con_postura(partes[partes["proceso_id"] == proceso["id"]], A, cambios_postura)
 
@@ -165,19 +176,24 @@ def evaluar(proceso: pd.Series, partes: pd.DataFrame, A: pd.DataFrame, H: pd.Dat
     txt_ten = (f"{len(bajan)} actores del proceso se alejaron en los últimos {meses} meses"
                + (f" ({', '.join(sorted(bajan)[:2])}{' y otros' if len(bajan) > 2 else ''})" if bajan else ""))
 
+    # 5. detonantes no sociales y contexto (denuncias, cambio de directiva, normas, seguridad)
+    pts_ctx, txt_ctx = anticipar.factor_contexto(contexto, com, str(proceso.get("proyecto", "") or ""), hoy,
+                                                 MAXIMOS["Detonantes y contexto"])
+
     comp = {"Oposición con poder": (pts_op, txt_op), "Precedentes de conflicto": (pts_pre, txt_pre),
-            "Compromisos vencidos": (pts_comp, txt_comp), "Posturas que empeoran": (pts_ten, txt_ten)}
+            "Compromisos vencidos": (pts_comp, txt_comp), "Posturas que empeoran": (pts_ten, txt_ten),
+            "Detonantes y contexto": (pts_ctx, txt_ctx)}
     total = round(sum(x for x, _ in comp.values()))
     dias_plazo = (proceso["fecha_limite"] - hoy).days if pd.notna(proceso["fecha_limite"]) else None
     return dict(puntos=total, nivel=nivel(total), componentes=comp, partes=p, dias_plazo=dias_plazo,
                 prioridad=round(total * proceso["impacto"] / 5), vencidos=v, precedentes=c)
 
 
-def cartera(procesos: pd.DataFrame, partes, A, H, conf, reg, hoy) -> pd.DataFrame:
+def cartera(procesos: pd.DataFrame, partes, A, H, conf, reg, hoy, contexto=None) -> pd.DataFrame:
     """Resumen de todos los procesos: riesgo, impacto y plazo."""
     filas = []
     for _, pr in procesos.iterrows():
-        r = evaluar(pr, partes, A, H, conf, reg, hoy)
+        r = evaluar(pr, partes, A, H, conf, reg, hoy, contexto=contexto)
         filas.append(dict(id=pr["id"], proceso=pr["proceso"], comunidad=pr["comunidad"], tipo=pr["tipo"],
                           riesgo=r["puntos"], nivel=r["nivel"], impacto=pr["impacto"], prioridad=r["prioridad"],
                           dias_plazo=r["dias_plazo"], fecha_limite=pr["fecha_limite"], estado=pr["estado"],

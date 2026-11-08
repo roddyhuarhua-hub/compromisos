@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import (actores, conflictos, ia, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
+from compromisos import (actores, anticipar, conflictos, ia, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
                          portafolio, presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
@@ -201,7 +201,7 @@ def procesar(texto: str, fecha_r: date, contexto: str) -> None:
 
 # ---------------------------------------------------------------- estado de sesion
 CLAVES_DATOS = ["comunidades", "proyectos", "registro", "actores", "relaciones", "posturas", "conflictos", "procesos",
-                "partes", "escenarios", "acciones"]
+                "partes", "escenarios", "acciones", "contexto"]
 
 
 @st.cache_data(show_spinner=False)
@@ -209,8 +209,8 @@ def demo() -> dict:
     return portafolio.cargar_demo(EJEMPLO)
 
 
-if "comunidades" not in st.session_state:  # la demo: una unidad minera y dos proyectos de exploracion
-    for k_, v_ in demo().items():
+for k_, v_ in demo().items():  # la demo: una unidad minera y dos proyectos de exploracion
+    if k_ not in st.session_state:
         st.session_state[k_] = v_.copy()
 if "extraccion" not in st.session_state:
     st.session_state.extraccion = None
@@ -316,9 +316,11 @@ def laminas_act_cache(A, R, H, corte, cliente, filtros) -> tuple[bytes, bytes]:
 
 
 @st.cache_data(show_spinner=False, max_entries=20)
-def laminas_riesgo_cache(pr, partes, A, R, H, conf, df, escenarios, acciones, corte, cliente) -> tuple[bytes, bytes]:
+def laminas_riesgo_cache(pr, partes, A, R, H, conf, df, escenarios, acciones, corte, cliente,
+                         contexto=None) -> tuple[bytes, bytes]:
     """Laminas 4K del proceso elegido en Riesgos y decisiones: devuelve (pptx, zip de PNG)."""
-    lams = laminas_riesgos.laminas_riesgos(pr, partes, A, R, H, conf, df, escenarios, acciones, corte, cliente)
+    lams = laminas_riesgos.laminas_riesgos(pr, partes, A, R, H, conf, df, escenarios, acciones, corte, cliente,
+                                           contexto)
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
@@ -763,7 +765,9 @@ with tab_tablero:
                 html.append(
                     f'<div class="alerta" style="--c:{col}"><div class="t">{ICONO_ESTADO[r["estado"]]} {r["descripcion"]}</div>'
                     f'<div class="m">{r["comunidad"]} · {r["responsable"]} ({r["responsable_detalle"] or "-"}) · '
-                    f'<b>{cuando}</b> · riesgo {r["riesgo_conflicto"]}</div></div>')
+                    f'<b>{cuando}</b> · riesgo {r["riesgo_conflicto"]}</div>'
+                    + (f'<div class="m">⏳ Espera de la otra parte: {r["depende_de"]}</div>' if r["depende_de"] else "")
+                    + '</div>')
             st.markdown("".join(html) or "Sin alertas 🎉", unsafe_allow_html=True)
         with c4:
             st.markdown("#### Estado de los compromisos")
@@ -957,7 +961,15 @@ with tab_actores:
 
     with st.expander("📝 Editar y descargar el mapa de actores"):
         e1, e2 = st.columns(2)
-        A_ed = e1.data_editor(V["actores"].reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_actores")
+        A_ed = e1.data_editor(V["actores"].reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch",
+                              key="ed_actores", column_config={
+                                  "postura_publica": st.column_config.TextColumn(
+                                      "Postura en público", help="Solo si en asamblea dice algo distinto de lo que "
+                                      "dice en privado: -2 opositor … 2 aliado. Vacío = igual."),
+                                  "interes_fondo": st.column_config.TextColumn(
+                                      "Interés de fondo (reservado)", width="large",
+                                      help="Lo que explica su postura y no está escrito en ningún acta: "
+                                           "antecedentes, aspiraciones, agravios. Solo para el equipo.")})
         R_ed = e2.data_editor(R.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_relaciones")
         b1, b2, b3 = st.columns(3)
         if b1.button("Guardar cambios del mapa"):
@@ -1205,12 +1217,14 @@ with tab_riesgos:
     st.markdown("Del diagnóstico a la decisión. Para cada **proceso clave** (una servidumbre, un contrato con una "
                 "empresa comunal, un monitoreo) la herramienta cruza lo que ya sabe del territorio: **quién está en "
                 "contra y cuánto pesa**, **qué conflictos hubo antes** en esa comunidad, **qué compromisos están "
-                "vencidos** y **quién se está alejando**. Con eso estima el riesgo de paralización, muestra quién "
-                "puede frenar el proceso y te deja probar escenarios antes de decidir.")
+                "vencidos**, **quién se está alejando** y **qué detonantes hay en el contexto** (denuncias, cambio "
+                "de directiva, normas, seguridad). Con eso estima el riesgo de paralización, te dice **qué hacer "
+                "primero y cuánto bajaría el riesgo**, y te deja probar escenarios antes de decidir.")
     if P_r.empty:
         st.info("Aún no hay procesos. Agrégalos abajo, en **Editar procesos y actores**.")
     else:
-        cart = riesgos.cartera(P_r, PA_r, A_hoy, H_r, C_r, base_df, hoy)
+        CTX_r = V.get("contexto")
+        cart = riesgos.cartera(P_r, PA_r, A_hoy, H_r, C_r, base_df, hoy, contexto=CTX_r)
         pend = AC_r[AC_r["estado"] != "Hecha"]
         prox = cart.dropna(subset=["dias_plazo"]).sort_values("dias_plazo")
         prox = prox[prox["dias_plazo"] >= 0]
@@ -1255,7 +1269,7 @@ with tab_riesgos:
         pid = st.selectbox("🔎 Proceso a analizar", list(nombres_p), key="rg_proceso",
                            format_func=lambda i: f"{i} · {nombres_p[i]}")
         pr = P_r[P_r["id"] == pid].iloc[0]
-        r0 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy)
+        r0 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy, contexto=CTX_r)
         color_n = riesgos.NIVEL_COLOR[r0["nivel"]]
         plazo = (f"{pr['fecha_limite']:%d/%m/%Y} (faltan {r0['dias_plazo']} días)" if r0["dias_plazo"] is not None
                  and r0["dias_plazo"] >= 0 else f"{pr['fecha_limite']:%d/%m/%Y} (vencido)"
@@ -1283,8 +1297,62 @@ with tab_riesgos:
                 ic = "🔴" if pts >= 0.6 * riesgos.MAXIMOS[n] else "🟡" if pts >= 0.3 * riesgos.MAXIMOS[n] else "🟢"
                 st.markdown(f"{ic} **{n}:** {txt}.")
         st.caption("El puntaje (0–100) es una guía para conversar en el equipo, no una predicción: suma la oposición "
-                   "de quienes deciden o pueden vetar (40), los precedentes de medidas de fuerza en la comunidad (20), "
-                   "los compromisos vencidos (20) y las posturas que empeoraron en 6 meses (20).")
+                   "de quienes deciden o pueden vetar (35), los precedentes de medidas de fuerza en la comunidad (15), "
+                   "los compromisos vencidos (15), las posturas que empeoraron en 6 meses (15) y los detonantes y el "
+                   "contexto (20): denuncias ambientales, comerciales o policiales, cambio de directiva, normas en "
+                   "debate y riesgos de seguridad. Para la oposición pesa lo que cada actor dice **en público**.")
+
+        # --- si haces esto, pasa esto
+        st.markdown("#### 🧭 Si haces esto, pasa esto")
+        st.caption("La herramienta prueba, actor por actor, qué pasaría con el riesgo si se atiende lo que le "
+                   "preocupa (o si se logra que diga en público lo que dice en privado) y ordena las acciones por "
+                   "su efecto. Es una guía para decidir por dónde empezar, no una garantía.")
+        kw_ev = dict(partes=PA_r, A=A_hoy, H=H_r, conf=C_r, reg=base_df, hoy=hoy, contexto=CTX_r)
+        jug, comb = anticipar.mejores_jugadas(riesgos.evaluar, pr, r0["partes"], r0["puntos"], n=3, **kw_ev)
+        j1, j2 = st.columns([1.35, 1])
+        with j1:
+            if jug.empty:
+                st.info("No hay una acción sobre un solo actor que baje el riesgo: el peso está en el contexto, los "
+                        "precedentes o los compromisos vencidos.")
+            else:
+                html_j = []
+                for k_, (_, j) in enumerate(jug.iterrows(), 1):
+                    fondo_j = f" · <i>De fondo: {j['fondo']}</i>" if j["fondo"] else ""
+                    html_j.append(f"""
+<div class="evento" style="border-left:6px solid #1baf7a;padding:10px 14px">
+  <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+    <div style="font-weight:700">{k_}. {j['nombre']} <span style="color:#5b6675;font-weight:500">· {j['rol']}</span></div>
+    <div style="font-weight:700;color:#1baf7a;white-space:nowrap">−{j['baja']} pts</div></div>
+  <div style="font-size:13.5px;margin:3px 0">{j['accion']}</div>
+  <div style="font-size:12.5px;color:#5b6675">{actores.POSTURA_TXT[j['de']]} → <b>{actores.POSTURA_TXT[j['a']]}</b> ·
+  el riesgo pasaría de {j['antes']} a <b>{j['despues']}</b>{fondo_j}</div>
+</div>""")
+                st.markdown("".join(html_j), unsafe_allow_html=True)
+                if comb is not None:
+                    st.success(f"Si logras las {len(jug)} jugadas, el riesgo pasaría de **{r0['puntos']}** a "
+                               f"**{comb}** ({riesgos.nivel(comb).lower()}). Hoy una paralización es "
+                               f"**{anticipar.probabilidad(r0['puntos'])}**; después sería "
+                               f"**{anticipar.probabilidad(comb)}**.")
+                faltan_j = jug[~jug["nombre"].isin(AC_r.loc[AC_r["proceso_id"] == pid, "nombre"])]
+                if not faltan_j.empty and st.button(f"➕ Agregar {len(faltan_j)} jugada(s) al plan de acción",
+                                                    key=f"rg_jug_{pid}"):
+                    nuevas = pd.DataFrame([dict(proceso_id=pid, nombre=j["nombre"], estrategia="Atender sus "
+                                                "preocupaciones de cerca", accion=j["accion"],
+                                                responsable=pr["responsable"], fecha=None, estado="Pendiente")
+                                           for _, j in faltan_j.iterrows()])
+                    st.session_state.acciones = riesgos.normalizar_acciones(
+                        pd.concat([st.session_state.acciones, nuevas], ignore_index=True))
+                    st.rerun()
+        with j2:
+            st.markdown("##### 📈 ¿Está funcionando el plan?")
+            tend = anticipar.tendencia(riesgos.evaluar, pr, PA_r, V["actores"], H_r, C_r, V["registro"], hoy, CTX_r)
+            if len(tend) > 1:
+                st.plotly_chart(anticipar.figura_tendencia(tend), width="stretch", config=cfg("tendencia_riesgo"))
+                d_ = int(tend["puntos"].iloc[-1] - tend["puntos"].iloc[0])
+                st.caption(f"Riesgo del proceso a fin de cada mes, con lo que se sabía en esa fecha. En 6 meses "
+                           f"{'subió' if d_ > 0 else 'bajó' if d_ < 0 else 'no cambió'}"
+                           f"{f' {abs(d_)} puntos' if d_ else ''}. Sirve para mostrar a la gerencia si las acciones "
+                           f"están cambiando la situación.")
 
         # --- quien puede frenar el proceso
         st.markdown("#### 🚧 Quién puede frenar el proceso y cómo acercarse")
@@ -1297,12 +1365,19 @@ with tab_riesgos:
             for v2, (_, a) in zip(st.columns(3), p0[p0["presion"] > 0].head(3).iterrows()):
                 with v2:
                     pts_ = riesgos.puentes(a["nombre"], A_hoy, R_r)
+                    fondo_html = (f"<span style='color:#5b6675'>De fondo:</span> <i>{a['interes_fondo']}</i><br>"
+                                  if a.get("interes_fondo") else "")
+                    doble_html = (f"<span style='color:#a32424'>⚠️ En privado dice "
+                                  f"{actores.POSTURA_TXT[int(a['postura_privada'])].lower()}, en público "
+                                  f"{actores.POSTURA_TXT[int(a['postura'])].lower()}</span><br>"
+                                  if a.get("doble_discurso") else "")
                     dist = riesgos.distancia_empresa(a["nombre"], A_hoy, R_r)
                     st.markdown(f"""
 <div class="evento" style="border-left:5px solid {actores.POSTURA_COLOR[int(a['postura'])]}">
 <b>{a['nombre']}</b> · {a['rol']} · {actores.POSTURA_TXT[int(a['postura'])]} · influencia {a['influencia']}/5<br>
 <span style="color:#5b6675">Quiere:</span> {a['interes'] or '—'}<br>
 <span style="color:#5b6675">Le preocupa:</span> {a['preocupacion'] or '—'}<br>
+{fondo_html}{doble_html}
 <span style="color:#5b6675">Estrategia sugerida:</span> <b>{a['estrategia']}</b><br>
 <span style="color:#5b6675">Quién puede abrir el diálogo:</span> {', '.join(pts_[:3]) or 'sin puentes en el mapa'}
 {f'· a {dist} pasos de la empresa en la red' if dist else ''}
@@ -1317,7 +1392,7 @@ with tab_riesgos:
             es_p = ES_r[ES_r["proceso_id"] == pid]
             nombres_es = list(dict.fromkeys(es_p["escenario"]))
             res_es = [(n, riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy,
-                                          dict(zip(g["nombre"], g["postura_nueva"])))["puntos"])
+                                          dict(zip(g["nombre"], g["postura_nueva"])), contexto=CTX_r)["puntos"])
                       for n, g in ((n, es_p[es_p["escenario"] == n]) for n in nombres_es)]
             with st.container():  # escenarios guardados, a todo el ancho
                 if res_es:
@@ -1354,7 +1429,7 @@ with tab_riesgos:
             manual = {n: POSTURA_OPC.index(v) - 2 for n, v in zip(ed["nombre"], ed["en_escenario"])}
             cambios = {n: v for n, v in manual.items()
                        if v != int(p0.loc[p0["nombre"] == n, "postura_antes"].iloc[0])}
-            r1 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy, cambios)
+            r1 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy, cambios, contexto=CTX_r)
             o1, o2 = st.columns([0.8, 1.3])
             with o1:
                 st.markdown(f"##### Resultado: <span style='color:{riesgos.NIVEL_COLOR[r1['nivel']]}'>"
@@ -1471,12 +1546,12 @@ with tab_riesgos:
             with st.popover("📥 Bajar el análisis de este proceso para una presentación", width="stretch"):
                 st.markdown("**4 láminas en 4K (3840 × 2160)**: riesgo del proceso y por qué, quién puede frenarlo, "
                             "escenarios y plan de acción.")
-                clave_r = (PROY, pid, hoy, cliente, len(PA_r), len(ES_r), len(AC_r), int(A_hoy["postura"].sum()),
+                clave_r = (PROY, pid, hoy, cliente, len(PA_r), len(CTX_r) if CTX_r is not None else 0, len(ES_r), len(AC_r), int(A_hoy["postura"].sum()),
                            r0["puntos"])
                 if st.button("Preparar láminas", type="primary", key="btn_lam_rg"):
                     with st.spinner("Dibujando las láminas en alta resolución…"):
                         st.session_state.laminas_rg = (clave_r, laminas_riesgo_cache(
-                            pr, PA_r, A_hoy, R_r, H_r, C_r, base_df, ES_r, AC_r, hoy, cliente_lam))
+                            pr, PA_r, A_hoy, R_r, H_r, C_r, base_df, ES_r, AC_r, hoy, cliente_lam, CTX_r))
                 lr = st.session_state.get("laminas_rg")
                 if lr and lr[0] == clave_r:
                     q1, q2 = st.columns(2)
@@ -1485,6 +1560,29 @@ with tab_riesgos:
                                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
                     q2.download_button("⬇️ Imágenes PNG (.zip)", lr[1][1], width="stretch", key="dl_rg_zip",
                                        file_name=f"confluentia_riesgo_{pid}_{hoy:%Y%m%d}.zip", mime="application/zip")
+
+    with st.expander("🌩️ Detonantes y contexto: denuncias, cambio de directiva, normas, seguridad"):
+        st.caption("Hechos que no son una protesta pero frenan el diálogo: una denuncia ambiental, comercial o "
+                   "policial contra un comunero, la elección de una nueva directiva, una norma en debate o un riesgo "
+                   "de seguridad para el personal. Una denuncia pesa 3 meses; un cambio de directiva, desde 5 meses "
+                   "antes. Deja la comunidad vacía si afecta a todo el proyecto.")
+        CTX_v = V.get("contexto")
+        CTX_v = CTX_v if CTX_v is not None else anticipar.normalizar_contexto(pd.DataFrame())
+        CTX_ed = st.data_editor(CTX_v.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch",
+                                key="ed_contexto", column_config={
+                                    "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                                    "proyecto": st.column_config.SelectboxColumn("Proyecto", options=PROYECTOS),
+                                    "comunidad": st.column_config.SelectboxColumn(
+                                        "Comunidad", options=[""] + list(COMUNIDADES["comunidad"])),
+                                    "tipo": st.column_config.SelectboxColumn("Tipo",
+                                                                             options=list(anticipar.TIPOS_CONTEXTO)),
+                                    "descripcion": st.column_config.TextColumn("Qué pasó", width="large"),
+                                    "intensidad": st.column_config.NumberColumn("Intensidad (1-3)", min_value=1,
+                                                                                max_value=3)})
+        if st.button("Guardar detonantes y contexto", key="g_contexto"):
+            st.session_state.contexto = anticipar.normalizar_contexto(
+                portafolio.reemplazar(st.session_state.contexto, CTX_v, CTX_ed), st.session_state.comunidades)
+            st.rerun()
 
     with st.expander("📝 Editar procesos y actores de cada proceso"):
         st.markdown("**Procesos**")

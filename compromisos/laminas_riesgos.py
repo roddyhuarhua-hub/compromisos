@@ -26,22 +26,22 @@ def _ejes(ax):
         ax.spines[sp].set_visible(False)
 
 
-def _escenarios(pr, partes, A, H, conf, reg, hoy, escenarios) -> list[tuple[str, int, dict]]:
+def _escenarios(pr, partes, A, H, conf, reg, hoy, escenarios, contexto=None) -> list[tuple[str, int, dict]]:
     es = escenarios[escenarios["proceso_id"] == pr["id"]]
     out = []
     for n in dict.fromkeys(es["escenario"]):
         g = es[es["escenario"] == n]
         cam = dict(zip(g["nombre"], g["postura_nueva"]))
-        out.append((n, rg.evaluar(pr, partes, A, H, conf, reg, hoy, cam)["puntos"], cam))
+        out.append((n, rg.evaluar(pr, partes, A, H, conf, reg, hoy, cam, contexto=contexto)["puntos"], cam))
     return out
 
 
 def laminas_riesgos(pr: pd.Series, partes: pd.DataFrame, A: pd.DataFrame, R: pd.DataFrame, H: pd.DataFrame,
                     conf: pd.DataFrame, reg: pd.DataFrame, escenarios: pd.DataFrame, acciones: pd.DataFrame,
-                    hoy: date, cliente: str = "") -> list[tuple[str, bytes]]:
+                    hoy: date, cliente: str = "", contexto: pd.DataFrame | None = None) -> list[tuple[str, bytes]]:
     """A al corte; reg con estado. Devuelve [(archivo, png 3840x2160), ...]."""
     out = []
-    r = rg.evaluar(pr, partes, A, H, conf, reg, hoy)
+    r = rg.evaluar(pr, partes, A, H, conf, reg, hoy, contexto=contexto)
     p = r["partes"]
     filtro = f"{pr['id']} · {_corto(pr['comunidad'])}"
 
@@ -138,7 +138,7 @@ def laminas_riesgos(pr: pd.Series, partes: pd.DataFrame, A: pd.DataFrame, R: pd.
     out.append(("02_quien_puede_frenar.png", _a_png(fig)))
 
     # 3. escenarios
-    res = _escenarios(pr, partes, A, H, conf, reg, hoy, escenarios)
+    res = _escenarios(pr, partes, A, H, conf, reg, hoy, escenarios, contexto)
     if res:
         mejor = min(res, key=lambda t: t[1])
         fig = _lamina("¿Qué pasa si…? Escenarios antes de decidir",

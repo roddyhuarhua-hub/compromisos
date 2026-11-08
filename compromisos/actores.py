@@ -15,7 +15,10 @@ import plotly.graph_objects as go
 
 from .modelos import ExtraccionReunion
 
-COL_ACTORES = ["nombre", "tipo", "cargo", "organizacion", "comunidad", "postura", "influencia", "fuente"]
+# postura_publica: lo que dice en asamblea si difiere de lo que dice en privado (vacio = igual).
+# interes_fondo: motivacion de fondo o antecedentes que explican su postura (reservado al equipo).
+COL_ACTORES = ["nombre", "tipo", "cargo", "organizacion", "comunidad", "postura", "influencia", "fuente",
+               "postura_publica", "interes_fondo"]
 COL_RELACIONES = ["origen", "destino", "tipo", "descripcion", "fuente"]
 COL_HISTORIAL = ["nombre", "fecha", "reunion", "comunidad", "postura", "influencia", "evidencia"]
 
@@ -52,7 +55,9 @@ def normalizar_actores(df: pd.DataFrame) -> pd.DataFrame:
             df[c] = None
     df["postura"] = pd.to_numeric(df["postura"], errors="coerce").fillna(0).clip(-2, 2).astype(int)
     df["influencia"] = pd.to_numeric(df["influencia"], errors="coerce").fillna(3).clip(1, 5).astype(int)
-    texto = ["nombre", "tipo", "cargo", "organizacion", "comunidad", "fuente"]
+    pub = pd.to_numeric(df["postura_publica"], errors="coerce").clip(-2, 2)
+    df["postura_publica"] = pub.map(lambda v: "" if pd.isna(v) else str(int(v)))
+    texto = ["nombre", "tipo", "cargo", "organizacion", "comunidad", "fuente", "interes_fondo"]
     df[texto] = df[texto].fillna("").astype(str)
     df = df[df["nombre"].str.strip() != ""]
     return df[COL_ACTORES].drop_duplicates(subset="nombre", keep="last").reset_index(drop=True)

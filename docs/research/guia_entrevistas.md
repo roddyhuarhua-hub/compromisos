@@ -43,10 +43,10 @@ Duración: 25 a 30 minutos (llamada, WhatsApp o en persona). Pide permiso para t
 
 ## Bloque 5 · Demo (3 a 5 minutos, al final)
 
-Muestra en este orden: **modo campo en el celular** (una reunión que se convierte en compromisos) → **Portafolio** (todos los proyectos juntos) → panel ejecutivo → mapa de actores → **Riesgos y decisiones** (la servidumbre con riesgo 78 y el escenario de mesa técnica con docentes).
+Muestra en este orden: **modo campo en el celular** (una reunión que se convierte en compromisos) → **Portafolio** (todos los proyectos juntos) → panel ejecutivo → mapa de actores → **Riesgos y decisiones** (la servidumbre con riesgo 84, las jugadas de "si haces esto, pasa esto" y la evolución del riesgo mes a mes).
 
 18. ⭐ ¿Qué le falta para que la uses mañana? ¿Qué sobra?
-19. ⭐ El riesgo de paralización pesa así: oposición de quienes deciden o pueden vetar 40%, conflictos pasados 20%, compromisos vencidos 20% y actores que se alejan 20%. ¿Es así como tú lo pesarías? ¿Qué factor falta? (por ejemplo: elecciones comunales, cambio de junta, temporada de lluvias, presencia de dirigentes de fuera)
+19. ⭐ El riesgo de paralización pesa así: oposición de quienes deciden o pueden vetar 35%, conflictos pasados 15%, compromisos vencidos 15%, actores que se alejan 15% y detonantes y contexto 20% (denuncias, cambio de directiva, normas en debate, riesgo de seguridad). ¿Es así como tú lo pesarías? ¿Qué factor falta? (por ejemplo: temporada de lluvias, presencia de dirigentes de fuera)
 20. Los escenarios (mesa técnica con docentes, consorcio de empresas comunales), ¿se parecen a las opciones que de verdad evalúan? ¿Qué escenario probarías primero?
 21. ¿Te sentirías cómodo registrando la postura de una persona en la herramienta? ¿Quién debería poder verlo?
 22. ⭐ ¿Quién en tu empresa pagaría por esto y de qué presupuesto saldría? ¿Cuánto les cuesta hoy un día de paralización?

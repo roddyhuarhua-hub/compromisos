@@ -17,7 +17,7 @@ import plotly.graph_objects as go
 
 from . import actores as ac
 from . import conflictos as cf
-from . import registro, riesgos, visual
+from . import anticipar, registro, riesgos, visual
 
 TODOS = "🌐 Todos los proyectos"
 SIN_PROYECTO = "Sin proyecto"
@@ -30,13 +30,14 @@ def cargar_demo(carpeta: Path) -> dict[str, pd.DataFrame]:
     ex = carpeta / "exploracion"
 
     def ambos(principal: str, extra: str) -> pd.DataFrame:
-        partes = [pd.read_csv(carpeta / principal)]
-        if (ex / extra).exists():
-            partes.append(pd.read_csv(ex / extra))
-        return pd.concat(partes, ignore_index=True)
+        partes = [pd.read_csv(r) for r in (carpeta / principal, ex / extra) if r.exists()]
+        return pd.concat(partes, ignore_index=True) if partes else pd.DataFrame()
 
+    coms = normalizar_comunidades(ambos("comunidades.csv", "comunidades.csv"))
+    de_com = dict(zip(coms["comunidad"], coms["proyecto"]))
+    procesos = riesgos.normalizar_procesos(ambos("procesos_demo.csv", "procesos.csv"))
     return dict(
-        comunidades=normalizar_comunidades(ambos("comunidades.csv", "comunidades.csv")),
+        comunidades=coms,
         proyectos=pd.read_csv(carpeta / "proyectos.csv").fillna("") if (carpeta / "proyectos.csv").exists()
         else pd.DataFrame(columns=["proyecto", "tipo", "region", "fase", "responsable"]),
         registro=registro.normalizar(ambos("registro_demo.csv", "registro.csv")),
@@ -44,10 +45,11 @@ def cargar_demo(carpeta: Path) -> dict[str, pd.DataFrame]:
         relaciones=ac.normalizar_relaciones(ambos("relaciones_demo.csv", "relaciones.csv")),
         posturas=ac.normalizar_historial(ambos("posturas_demo.csv", "posturas.csv")),
         conflictos=cf.normalizar(ambos("conflictos_demo.csv", "conflictos.csv")),
-        procesos=riesgos.normalizar_procesos(ambos("procesos_demo.csv", "procesos.csv")),
+        procesos=procesos.assign(proyecto=procesos["comunidad"].map(de_com).fillna("")),
         partes=riesgos.normalizar_partes(ambos("proceso_actores_demo.csv", "proceso_actores.csv")),
         escenarios=riesgos.normalizar_escenarios(ambos("escenarios_demo.csv", "escenarios.csv")),
         acciones=riesgos.normalizar_acciones(ambos("acciones_demo.csv", "acciones.csv")),
+        contexto=anticipar.normalizar_contexto(ambos("contexto_demo.csv", "contexto.csv"), coms),
     )
 
 
@@ -127,6 +129,9 @@ def filtrar(datos: dict[str, pd.DataFrame], proyecto: str) -> dict[str, pd.DataF
         escenarios=datos["escenarios"][datos["escenarios"]["proceso_id"].isin(ids)],
         acciones=datos["acciones"][datos["acciones"]["proceso_id"].isin(ids)],
     )
+    if "contexto" in datos:
+        ctx = datos["contexto"]
+        out["contexto"] = ctx[ctx["comunidad"].isin(nombres_c) | (ctx["proyecto"] == proyecto)]
     return out
 
 
@@ -159,7 +164,7 @@ def resumen(datos: dict[str, pd.DataFrame], hoy: date) -> pd.DataFrame:
         fuerza = c3[c3["tipo"].isin(cf.DE_FUERZA)] if not c3.empty else c3
         A_p = A_hoy[A_hoy["nombre"].map(lambda n: p in perte.get(n, set()))]
         cart = riesgos.cartera(sub["procesos"], sub["partes"], A_hoy, datos["posturas"], datos["conflictos"], reg,
-                               hoy) if not sub["procesos"].empty else pd.DataFrame()
+                               hoy, contexto=sub.get("contexto")) if not sub["procesos"].empty else pd.DataFrame()
         prox = cart.dropna(subset=["dias_plazo"]) if not cart.empty else cart
         prox = prox[prox["dias_plazo"] >= 0].sort_values("dias_plazo") if not prox.empty else prox
         exig = int(r["cumplido"].sum() + (r["estado"] == "Vencido").sum()) if not r.empty else 0

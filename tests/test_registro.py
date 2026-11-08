@@ -301,3 +301,32 @@ def test_portafolio_varios_proyectos():
         registro.con_estado(d["registro"], date(2026, 11, 7))["estado"] == "Vencido").sum()
     centro, zoom = pf.encuadre(d["comunidades"]["lat"], d["comunidades"]["lon"])
     assert zoom < 6 < pf.encuadre(azul["comunidades"]["lat"], azul["comunidades"]["lon"])[1]
+
+
+def test_anticipar_contexto_jugadas_tendencia():
+    from compromisos import anticipar, riesgos as rg
+    d = _datos_riesgo()
+    ctx = anticipar.normalizar_contexto(pd.read_csv(EJEMPLO / "contexto_demo.csv"))
+    p1 = d["P"].set_index("id").loc["P1"].copy()
+    p1["id"] = "P1"
+    args = (p1, d["PA"], d["A"], d["H"], d["conf"], d["reg"], d["hoy"])
+    sin = rg.evaluar(*args)
+    con = rg.evaluar(*args, contexto=ctx)
+    assert con["puntos"] > sin["puntos"] and con["componentes"]
+    # una denuncia de hace un año ya no pesa; un cambio de directiva en 4 meses si
+    viejo = pd.DataFrame([dict(fecha="2025-10-01", comunidad="X", tipo="Denuncia policial", descripcion="a"),
+                          dict(fecha="2027-03-01", comunidad="X", tipo="Cambio de directiva", descripcion="b")])
+    v = anticipar.vigentes(anticipar.normalizar_contexto(viejo), "X", "", d["hoy"])
+    assert list(v["tipo"]) == ["Cambio de directiva"]
+    # doble discurso: dice en publico menos de lo que dice en privado
+    p = rg.partes_con_postura(d["PA"][d["PA"]["proceso_id"] == "P1"], d["A"])
+    assert p["doble_discurso"].any() and (p.loc[p["doble_discurso"], "postura_privada"] >
+                                          p.loc[p["doble_discurso"], "postura"]).all()
+    kw = dict(partes=d["PA"], A=d["A"], H=d["H"], conf=d["conf"], reg=d["reg"], hoy=d["hoy"], contexto=ctx)
+    jug, comb = anticipar.mejores_jugadas(rg.evaluar, p1, con["partes"], con["puntos"], n=3, **kw)
+    assert not jug.empty and (jug["baja"] > 0).all() and list(jug["baja"]) == sorted(jug["baja"], reverse=True)
+    assert comb is None or comb < con["puntos"]
+    bruto = registro.cargar(EJEMPLO / "registro_demo.csv")
+    t = anticipar.tendencia(rg.evaluar, p1, d["PA"], d["A"], d["H"], d["conf"], bruto, d["hoy"], ctx)
+    assert len(t) >= 6 and t.iloc[-1]["fecha"] == d["hoy"] and t.iloc[-1]["puntos"] == con["puntos"]
+    assert anticipar.probabilidad(80) == "muy probable" and anticipar.probabilidad(10) == "poco probable"
