@@ -39,6 +39,9 @@ st.logo(str(RAIZ / "img" / "logo_confluentia_horizontal.png"), icon_image=str(RA
 LOGO_BLANCO = base64.b64encode((RAIZ / "img" / "logo_confluentia_blanco.png").read_bytes()).decode()
 
 
+CAMPO = st.query_params.get("campo", "") in ("1", "si", "true")  # ?campo=1: vista para celular
+
+
 def cfg(nombre: str, zoom: bool = False) -> dict:
     """Barra del grafico con un solo boton: descargar en PNG de alta resolucion (para PPT o informes)."""
     return {"displaylogo": False, "scrollZoom": zoom, "modeBarButtons": [["toImage"]],
@@ -90,6 +93,23 @@ html, body, [class*="css"], .stMarkdown, .stTextInput, .stButton button { font-f
 .bar > div { height: 6px; border-radius: 4px; background: var(--c); }
 .stTabs [data-baseweb="tab-list"] { gap: 6px; }
 .stTabs [data-baseweb="tab"] { font-weight: 600; font-size: 15px; padding: 8px 14px; }
+/* celular: menos relleno y letras proporcionadas */
+@media (max-width: 640px) {
+  .block-container { padding: 3.4rem 0.9rem 3rem 0.9rem; }
+  .hero { padding: 16px 18px; border-radius: 14px; }
+  .hero h1 { font-size: 22px; }
+  .hero p { font-size: 13px; }
+  .hero .por { font-size: 10px; }
+  .hero .chip { font-size: 11.5px; padding: 3px 9px; }
+  .hero .chip.extra { display: none; }
+  .stTabs [data-baseweb="tab"] { font-size: 13px; padding: 6px 8px; }
+  .kpis { gap: 8px; }
+  div[data-testid="stPlotlyChart"] { padding: 2px; }
+  .stButton button, .stDownloadButton button { min-height: 46px; }
+}
+.campo { background: #2d4a33; color: #fff; border-radius: 14px; padding: 12px 16px; margin-bottom: 12px; }
+.campo b { font-size: 18px; }
+.campo span { display: block; font-size: 12.5px; color: rgba(255,255,255,0.85); }
 div[data-testid="stPlotlyChart"] { background: #fff; border: 1px solid rgba(31,42,55,0.08); border-radius: 14px;
                                    padding: 6px 8px; box-shadow: 0 1px 2px rgba(16,24,40,0.04); }
 </style>
@@ -165,7 +185,7 @@ if "extraccion" not in st.session_state:
     st.session_state.extraccion = None
 
 # ---------------------------------------------------------------- barra lateral
-CLAVES_PROY = ["proyecto", "proy_panel", "proy_actores", "proy_riesgos"]
+CLAVES_PROY = ["proyecto", "proy_panel", "proy_actores", "proy_riesgos", "proy_campo"]
 
 
 def sincronizar_proyecto(origen: str) -> None:
@@ -175,13 +195,15 @@ def sincronizar_proyecto(origen: str) -> None:
         st.session_state[k_] = valor
 
 
-def selector_proyecto(clave: str) -> None:
+def selector_proyecto(clave: str, contexto: bool = True) -> None:
     """Selector de unidad o proyecto al inicio de una pestaña, con una linea de contexto del ambito elegido."""
     s1, s2 = st.columns([1.3, 2.7], vertical_alignment="bottom")
     s1.selectbox("🗂️ Unidad o proyecto", [portafolio.TODOS] + PROYECTOS, key=clave,
                  on_change=sincronizar_proyecto, args=(clave,),
                  help="Cada unidad o proyecto tiene sus propios actores, conflictos y procesos. "
                       "El cambio se aplica a todas las pestañas.")
+    if not contexto:
+        return
     if PROY == portafolio.TODOS:
         s2.caption(f"🌐 Mirada corporativa: **{len(PROYECTOS)} proyectos**, {len(COMUNIDADES)} comunidades y "
                    f"{len(V['actores'])} actores juntos. Elige uno para decidir con el detalle de sus actores.")
@@ -217,6 +239,9 @@ with st.sidebar:
         st.session_state.pop("pptx", None)
         st.session_state["_proy_previo"] = PROY
     hoy = st.date_input("Fecha de corte", value=date.today(), format="DD/MM/YYYY")
+    if not CAMPO:
+        st.link_button("📱 Modo campo (celular)", "?campo=1", width="stretch",
+                       help="Solo el formulario para subir reuniones, asambleas y actas, pensado para el celular.")
     st.divider()
     st.markdown("**Registro**")
     subido = st.file_uploader("Cargar registro (CSV)", type=["csv"], key="csv_registro")
@@ -274,22 +299,241 @@ def laminas_conf_cache(conf, df, corte, cliente, filtros, fondo="satelite", coms
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
-with st.sidebar:
+if not CAMPO:  # en el celular no hace falta armar presentaciones
+    with st.sidebar:
+        st.divider()
+        st.markdown("**📥 Llévalo a tu presentación**")
+        cliente = st.text_input("Cliente (para la portada)", "Minera Andina S.A.C. (ejemplo)")
+        cliente_lam = cliente + (f" · {PROY}" if PROY != portafolio.TODOS else "")  # pie de las laminas
+        if st.button("Preparar presentación (.pptx)", width="stretch"):
+            with st.spinner("Armando las diapositivas…"):
+                st.session_state.pptx = pptx_cache(base_df, V["actores"], V["relaciones"], V["posturas"], hoy,
+                                                   cliente, COMUNIDADES)
+        if st.session_state.get("pptx"):
+            st.download_button("⬇️ Descargar presentación", st.session_state.pptx, type="primary", width="stretch",
+                               file_name=f"confluentia_reporte_{hoy:%Y%m%d}.pptx",
+                               mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+        st.caption("8 diapositivas con la marca Confluentia: resumen, semáforo, estados, vencidos, mapa de actores y "
+                   "cambios de postura. Los gráficos son editables en PowerPoint. Cada gráfico de la app también se "
+                   "baja como imagen con el ícono 📷 que aparece al pasar el mouse.")
+
+
+# ---------------------------------------------------------------- pantalla para subir reuniones
+def tarjetas_compromisos(nuevos: pd.DataFrame, clave: str) -> pd.DataFrame:
+    """Revision de compromisos en el celular: una tarjeta por compromiso, campos grandes y casilla para quitarlo."""
+    filas = []
+    for i, r in nuevos.reset_index(drop=True).iterrows():
+        with st.container(border=True):
+            incluir = st.checkbox(f"Compromiso {i + 1}", value=True, key=f"inc_{clave}_{i}")
+            desc = st.text_area("Qué se comprometió", r["descripcion"], key=f"des_{clave}_{i}", height=90,
+                                label_visibility="collapsed")
+            k1, k2, k3 = st.columns(3)
+            resp_ops = ["Empresa", "Estado", "Comunidad", "Otro"]
+            resp = k1.selectbox("Responsable", resp_ops, key=f"res_{clave}_{i}",
+                                index=resp_ops.index(r["responsable"]) if r["responsable"] in resp_ops else 0)
+            plazo = k2.date_input("Plazo", value=r["fecha_limite"] if pd.notna(r["fecha_limite"]) else None,
+                                  format="DD/MM/YYYY", key=f"pla_{clave}_{i}")
+            riesgo_ops = ["alto", "medio", "bajo"]
+            riesgo = k3.selectbox("Riesgo", riesgo_ops, key=f"rie_{clave}_{i}",
+                                  index=riesgo_ops.index(r["riesgo_conflicto"])
+                                  if r["riesgo_conflicto"] in riesgo_ops else 1)
+            if r.get("cita_textual"):
+                st.caption(f"🗣️ «{r['cita_textual']}»")
+        if incluir and str(desc).strip():
+            filas.append(dict(r, descripcion=desc, responsable=resp, fecha_limite=plazo, riesgo_conflicto=riesgo))
+    if st.button("➕ Agregar un compromiso que faltó", key=f"add_{clave}"):
+        st.session_state[f"extra_{clave}"] = st.session_state.get(f"extra_{clave}", 0) + 1
+    for j in range(st.session_state.get(f"extra_{clave}", 0)):
+        with st.container(border=True):
+            desc = st.text_area("Nuevo compromiso", key=f"nde_{clave}_{j}", height=80)
+            k1, k2 = st.columns(2)
+            resp = k1.selectbox("Responsable", ["Empresa", "Estado", "Comunidad", "Otro"], key=f"nre_{clave}_{j}")
+            plazo = k2.date_input("Plazo", value=None, format="DD/MM/YYYY", key=f"npl_{clave}_{j}")
+        if str(desc).strip():
+            filas.append(dict(descripcion=desc, responsable=resp, responsable_detalle="", tema="",
+                              fecha_limite=plazo, riesgo_conflicto="medio", cita_textual=""))
+    cols = ["descripcion", "responsable", "responsable_detalle", "tema", "fecha_limite", "riesgo_conflicto",
+            "cita_textual"]
+    return pd.DataFrame(filas, columns=cols)
+
+
+def pantalla_reunion(campo: bool = False) -> None:
+    """Formulario para subir una reunion, asamblea o acta. En modo campo (celular) muestra menos columnas."""
+    st.subheader("Sube la reunión y la IA extrae los compromisos" if not campo else "Nueva reunión, asamblea o acta")
+    c0, c3, c2, c4 = st.columns([1.2, 1.4, 1, 1])
+    tipo_r = c0.selectbox("Tipo", ["Mesa de trabajo", "Asamblea comunal", "Reunión", "Acta de acuerdos",
+                                   "Visita de campo", "Taller informativo"])
+    comunidad = c3.selectbox("Comunidad", COMUNIDADES["comunidad"].tolist(), index=0, accept_new_options=True)
+    fecha_r = c2.date_input("Fecha", value=date.today() if campo else date(2026, 11, 4), format="DD/MM/YYYY")
+    distrito_def = COMUNIDADES.set_index("comunidad")["distrito"].get(comunidad, "")
+    distrito = c4.text_input("Distrito", distrito_def)
+    nombre = st.text_input("Nombre de la reunión", f"{tipo_r} {str(comunidad).replace('C.C. ', '')}")
+
+    origen = st.radio(
+        "¿Qué tienes de la reunión?",
+        ["🎙️ Audio de la reunión", "📄 Foto del acta", "⌨️ Texto o transcripción", "⭐ Reunión de ejemplo"],
+        horizontal=True,
+    )
+
+    texto = ""
+    if origen == "🎙️ Audio de la reunión":
+        audio = st.file_uploader("Audio (mp3, m4a, wav, ogg; máx. 25 MB)",
+                                 type=["mp3", "m4a", "wav", "ogg", "webm", "mp4"])
+        grabado = st.audio_input("…o grábala aquí mismo")
+        fuente_audio = audio or grabado
+        if fuente_audio and st.button("Transcribir y extraer", type="primary", disabled=not hay_clave,
+                                      width="stretch"):
+            with st.status("Procesando la reunión…", expanded=True) as s:
+                s.write(f"🎧 Transcribiendo ({ia.descripcion_proveedor()})…")
+                datos = fuente_audio.getvalue()
+                t0 = time.perf_counter()
+                st.session_state.texto = transcribir_cache(
+                    getattr(fuente_audio, "name", "grabacion.wav"), datos,
+                    getattr(fuente_audio, "type", None) or "audio/wav")
+                st.session_state.minutos = len(datos) / (16000 * 60)  # aprox. 128 kbps
+                s.write(f"✅ Transcrito en {time.perf_counter() - t0:.0f} s. 🧠 Extrayendo compromisos…")
+                procesar(st.session_state.texto, fecha_r,
+                         f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")
+                s.update(label="Reunión procesada", state="complete")
+    elif origen == "📄 Foto del acta":
+        fotos = st.file_uploader("Fotos o escaneo del acta (puedes subir varias páginas)", type=["jpg", "jpeg", "png"],
+                                 accept_multiple_files=True,
+                                 help="En el celular, al tocar el botón puedes tomar la foto con la cámara.")
+        if fotos:
+            for col_f, foto in zip(st.columns(min(4, len(fotos))), fotos[:4]):
+                col_f.image(foto, width="stretch")
+            if len(fotos) > 4:
+                st.caption(f"…y {len(fotos) - 4} páginas más.")
+        if fotos and st.button("Leer acta y extraer", type="primary", disabled=not hay_clave, width="stretch"):
+            with st.spinner(f"Leyendo el acta ({len(fotos)} página{'s' * (len(fotos) > 1)})…"):
+                st.session_state.texto = "\n\n".join(
+                    (f"[Página {i}]\n" if len(fotos) > 1 else "") + ia.leer_acta_imagen(f.getvalue(), f.type)
+                    for i, f in enumerate(fotos, 1))
+                st.session_state.minutos = 0
+                procesar(st.session_state.texto, fecha_r,
+                         f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")
+    elif origen == "⌨️ Texto o transcripción":
+        st.session_state.texto = st.text_area("Pega aquí el acta o la transcripción", height=220,
+                                              value=st.session_state.get("texto", ""))
+        st.session_state.minutos = 0
+    else:
+        st.session_state.texto = (EJEMPLO / "transcripcion_reunion_demo.txt").read_text(encoding="utf-8")
+        st.session_state.minutos = 2.5
+        st.info("Reunión ficticia de demostración. Si no hay clave de IA se muestra la extracción guardada.")
+
+    texto = st.session_state.get("texto", "")
+    if texto:
+        with st.expander("Ver transcripción", expanded=False):
+            st.write(texto)
+
+        if st.button("🧠 Extraer compromisos", type="primary"):
+            procesar(texto, fecha_r, f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")
+
+    ext: ExtraccionReunion | None = st.session_state.extraccion
+    if ext:
+        st.markdown("#### Resumen")
+        st.write(ext.resumen)
+        if "uso" in st.session_state:
+            u = st.session_state.uso
+            st.caption(f"✅ Extraído con IA ({u.get('modelo', '')}) en {u.get('segundos', 0):.1f} s · "
+                       f"tokens: {u['entrada']:,} de entrada, {u['salida']:,} de salida · "
+                       f"costo estimado: US$ {st.session_state.costo:.4f}")
+        nuevos = registro.desde_extraccion(ext, nombre, fecha_r, comunidad, distrito,
+                                           fuente="IA (revisado)")
+        st.markdown(f"#### {len(nuevos)} compromisos encontrados · revísalos antes de guardar")
+        if campo:  # en el celular: una tarjeta por compromiso, sin tabla ancha
+            editados = tarjetas_compromisos(nuevos, clave=str(abs(hash(ext.resumen))))
+        else:
+            editados = st.data_editor(
+                nuevos[["descripcion", "responsable", "responsable_detalle", "tema",
+                        "fecha_limite", "riesgo_conflicto", "cita_textual"]],
+                num_rows="dynamic", width="stretch", hide_index=True,
+                column_config={
+                    "descripcion": st.column_config.TextColumn("Compromiso", width="large"),
+                    "responsable": st.column_config.SelectboxColumn(
+                        "Responsable", options=["Empresa", "Estado", "Comunidad", "Otro"]),
+                    "responsable_detalle": "Área / persona",
+                    "tema": "Tema",
+                    "fecha_limite": st.column_config.DateColumn("Plazo", format="DD/MM/YYYY"),
+                    "riesgo_conflicto": st.column_config.SelectboxColumn(
+                        "Riesgo", options=["alto", "medio", "bajo"]),
+                    "cita_textual": st.column_config.TextColumn("Cita textual", width="large"),
+                },
+                key="editor_nuevos",
+            )
+        if ext.temas_pendientes:
+            st.warning("**Temas sin acuerdo:** " + "; ".join(ext.temas_pendientes))
+
+        act_nuevos = pd.DataFrame([a.model_dump() for a in ext.actores],
+                                  columns=["nombre", "tipo", "cargo", "organizacion", "comunidad",
+                                           "postura", "influencia", "evidencia"])
+        rel_nuevas = pd.DataFrame([r.model_dump() for r in ext.relaciones],
+                                  columns=["origen", "destino", "tipo", "descripcion"])
+        with (st.expander(f"🕸️ {len(act_nuevos)} actores y {len(rel_nuevas)} relaciones detectados (opcional)")
+              if campo else st.container()):
+            st.markdown(f"#### 🕸️ {len(act_nuevos)} actores y {len(rel_nuevas)} relaciones detectados")
+            st.caption("Postura hacia la empresa: −2 opositor … +2 aliado. Influencia: 1 a 5. "
+                       "Se suman al Mapa de actores al guardar (si el actor ya existe, se actualiza).")
+            act_editados = st.data_editor(
+                act_nuevos, num_rows="dynamic", width="stretch", hide_index=True, key="editor_actores",
+                column_config={
+                    "nombre": "Actor", "cargo": "Cargo", "organizacion": "Organización", "comunidad": "Comunidad",
+                    "tipo": st.column_config.SelectboxColumn("Tipo", options=list(actores.SIMBOLO_TIPO)),
+                    "postura": st.column_config.NumberColumn("Postura", min_value=-2, max_value=2, step=1),
+                    "influencia": st.column_config.NumberColumn("Influencia", min_value=1, max_value=5, step=1),
+                    "evidencia": st.column_config.TextColumn("Evidencia (cita)", width="large"),
+                })
+            rel_editadas = st.data_editor(
+                rel_nuevas, num_rows="dynamic", width="stretch", hide_index=True, key="editor_relaciones",
+                column_config={
+                    "origen": "Actor A", "destino": "Actor B", "descripcion": "Descripción",
+                    "tipo": st.column_config.SelectboxColumn("Relación", options=list(actores.REL_ESTILO)),
+                })
+
+        b1, b2 = st.columns(2)
+        if b1.button("✅ Guardar en el registro", type="primary", width="stretch"):
+            base = editados.dropna(subset=["descripcion"]).copy()
+            base["id"] = [uuid.uuid4().hex[:8] for _ in range(len(base))]
+            base["reunion"], base["fecha_reunion"] = nombre, fecha_r
+            base["comunidad"], base["distrito"] = comunidad, distrito
+            base["beneficiario"], base["cumplido"] = comunidad, False
+            base["fuente"] = "IA (revisado)"
+            st.session_state.registro = registro.normalizar(
+                pd.concat([st.session_state.registro, base], ignore_index=True))
+            try:
+                ext_rev = ExtraccionReunion(
+                    resumen=ext.resumen, compromisos=[], temas_pendientes=ext.temas_pendientes,
+                    actores=act_editados.dropna(subset=["nombre"]).fillna({"postura": 0, "influencia": 3})
+                    .fillna("").to_dict("records"),
+                    relaciones=rel_editadas.dropna(subset=["origen", "destino"]).fillna("").to_dict("records"))
+            except Exception:
+                ext_rev = ext  # si la edicion no es valida, se usa lo que extrajo la IA
+            (st.session_state.actores, st.session_state.relaciones,
+             st.session_state.posturas) = actores.fusionar(
+                st.session_state.actores, st.session_state.relaciones, ext_rev, comunidad,
+                fuente=f"{nombre} ({fecha_r:%d/%m/%Y})", historial=st.session_state.posturas,
+                fecha=fecha_r, reunion=nombre)
+            st.session_state.extraccion = None
+            st.session_state.pop("pptx", None)  # la presentacion se vuelve a armar con los datos nuevos
+            st.toast("✅ Guardado. El Panel ejecutivo y el Mapa de actores ya lo incluyen.")
+            st.rerun()
+        b2.download_button(
+            "⬇️ Descargar ficha de la reunión (.md)",
+            registro.acta_markdown(ext, nombre, fecha_r, comunidad),
+            file_name=f"ficha_{fecha_r:%Y%m%d}.md",
+        )
+
+
+if CAMPO:  # celular del personal de campo: solo el formulario, sin pestañas
+    st.markdown(f"""<div class="campo"><b>🤝 Compromisos · Modo campo</b>
+<span>Sube la reunión, asamblea o acta desde el celular. Revisa lo que extrae la IA y guarda.</span></div>""",
+                unsafe_allow_html=True)
+    selector_proyecto("proy_campo", contexto=False)
+    pantalla_reunion(campo=True)
     st.divider()
-    st.markdown("**📥 Llévalo a tu presentación**")
-    cliente = st.text_input("Cliente (para la portada)", "Minera Andina S.A.C. (ejemplo)")
-    cliente_lam = cliente + (f" · {PROY}" if PROY != portafolio.TODOS else "")  # pie de las laminas
-    if st.button("Preparar presentación (.pptx)", width="stretch"):
-        with st.spinner("Armando las diapositivas…"):
-            st.session_state.pptx = pptx_cache(base_df, V["actores"], V["relaciones"], V["posturas"], hoy,
-                                               cliente, COMUNIDADES)
-    if st.session_state.get("pptx"):
-        st.download_button("⬇️ Descargar presentación", st.session_state.pptx, type="primary", width="stretch",
-                           file_name=f"confluentia_reporte_{hoy:%Y%m%d}.pptx",
-                           mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-    st.caption("8 diapositivas con la marca Confluentia: resumen, semáforo, estados, vencidos, mapa de actores y "
-               "cambios de postura. Los gráficos son editables en PowerPoint. Cada gráfico de la app también se "
-               "baja como imagen con el ícono 📷 que aparece al pasar el mouse.")
+    st.link_button("📊 Ver la app completa", "?", width="stretch")
+    st.stop()
+
 st.markdown(f"""
 <div class="hero">
   <img class="marca" src="data:image/png;base64,{LOGO_BLANCO}" alt="Confluentia">
@@ -299,12 +543,12 @@ st.markdown(f"""
   y para cuándo, y alerta antes de que un compromiso incumplido se convierta en conflicto.</p>
   <div class="chips">
     <span class="chip">📍 {base_df['comunidad'].nunique()} comunidades</span>
-    <span class="chip">🗓️ {base_df['reunion'].nunique()} reuniones</span>
+    <span class="chip extra">🗓️ {base_df['reunion'].nunique()} reuniones</span>
     <span class="chip">📌 {k_total['total']} compromisos</span>
     <span class="chip">🗂️ {PROY.replace('🌐 ', '') if PROY == portafolio.TODOS else PROY}</span>
-    <span class="chip">🕸️ {len(V['actores'])} actores mapeados</span>
-    <span class="chip">🎙️ Whisper + Gemini</span>
-    <span class="chip">Corte: {hoy:%d/%m/%Y}</span>
+    <span class="chip extra">🕸️ {len(V['actores'])} actores mapeados</span>
+    <span class="chip extra">🎙️ Whisper + Gemini</span>
+    <span class="chip extra">Corte: {hoy:%d/%m/%Y}</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -387,154 +631,9 @@ with tab_portafolio:
 
 # ---------------------------------------------------------------- 1. nueva reunion
 with tab_reunion:
-    st.subheader("Sube la reunión y la IA extrae los compromisos")
-    c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-    nombre = c1.text_input("Nombre de la reunión", "Mesa de trabajo Pucará Alto")
-    fecha_r = c2.date_input("Fecha", value=date(2026, 11, 4), format="DD/MM/YYYY")
-    comunidad = c3.selectbox("Comunidad", COMUNIDADES["comunidad"].tolist(), index=0, accept_new_options=True)
-    distrito_def = COMUNIDADES.set_index("comunidad")["distrito"].get(comunidad, "")
-    distrito = c4.text_input("Distrito", distrito_def)
-
-    origen = st.radio(
-        "¿Qué tienes de la reunión?",
-        ["🎙️ Audio de la reunión", "📄 Foto del acta", "⌨️ Texto o transcripción", "⭐ Reunión de ejemplo"],
-        horizontal=True,
-    )
-
-    texto = ""
-    if origen == "🎙️ Audio de la reunión":
-        audio = st.file_uploader("Audio (mp3, m4a, wav, ogg; máx. 25 MB)",
-                                 type=["mp3", "m4a", "wav", "ogg", "webm", "mp4"])
-        grabado = st.audio_input("…o grábala aquí mismo")
-        fuente_audio = audio or grabado
-        if fuente_audio and st.button("Transcribir y extraer", type="primary", disabled=not hay_clave):
-            with st.status("Procesando la reunión…", expanded=True) as s:
-                s.write(f"🎧 Transcribiendo ({ia.descripcion_proveedor()})…")
-                datos = fuente_audio.getvalue()
-                t0 = time.perf_counter()
-                st.session_state.texto = transcribir_cache(
-                    getattr(fuente_audio, "name", "grabacion.wav"), datos,
-                    getattr(fuente_audio, "type", None) or "audio/wav")
-                st.session_state.minutos = len(datos) / (16000 * 60)  # aprox. 128 kbps
-                s.write(f"✅ Transcrito en {time.perf_counter() - t0:.0f} s. 🧠 Extrayendo compromisos…")
-                procesar(st.session_state.texto, fecha_r,
-                         f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")
-                s.update(label="Reunión procesada", state="complete")
-    elif origen == "📄 Foto del acta":
-        foto = st.file_uploader("Foto o escaneo del acta", type=["jpg", "jpeg", "png"])
-        if foto:
-            st.image(foto, width=320)
-        if foto and st.button("Leer acta y extraer", type="primary", disabled=not hay_clave):
-            with st.spinner("Leyendo el acta…"):
-                st.session_state.texto = ia.leer_acta_imagen(foto.getvalue(), foto.type)
-                st.session_state.minutos = 0
-                procesar(st.session_state.texto, fecha_r,
-                         f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")
-    elif origen == "⌨️ Texto o transcripción":
-        st.session_state.texto = st.text_area("Pega aquí el acta o la transcripción", height=220,
-                                              value=st.session_state.get("texto", ""))
-        st.session_state.minutos = 0
-    else:
-        st.session_state.texto = (EJEMPLO / "transcripcion_reunion_demo.txt").read_text(encoding="utf-8")
-        st.session_state.minutos = 2.5
-        st.info("Reunión ficticia de demostración. Si no hay clave de IA se muestra la extracción guardada.")
-
-    texto = st.session_state.get("texto", "")
-    if texto:
-        with st.expander("Ver transcripción", expanded=False):
-            st.write(texto)
-
-        if st.button("🧠 Extraer compromisos", type="primary"):
-            procesar(texto, fecha_r, f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")
-
-    ext: ExtraccionReunion | None = st.session_state.extraccion
-    if ext:
-        st.markdown("#### Resumen")
-        st.write(ext.resumen)
-        if "uso" in st.session_state:
-            u = st.session_state.uso
-            st.caption(f"✅ Extraído con IA ({u.get('modelo', '')}) en {u.get('segundos', 0):.1f} s · "
-                       f"tokens: {u['entrada']:,} de entrada, {u['salida']:,} de salida · "
-                       f"costo estimado: US$ {st.session_state.costo:.4f}")
-        nuevos = registro.desde_extraccion(ext, nombre, fecha_r, comunidad, distrito,
-                                           fuente="IA (revisado)")
-        st.markdown(f"#### {len(nuevos)} compromisos encontrados · revísalos antes de guardar")
-        editados = st.data_editor(
-            nuevos[["descripcion", "responsable", "responsable_detalle", "tema",
-                    "fecha_limite", "riesgo_conflicto", "cita_textual"]],
-            num_rows="dynamic", width="stretch", hide_index=True,
-            column_config={
-                "descripcion": st.column_config.TextColumn("Compromiso", width="large"),
-                "responsable": st.column_config.SelectboxColumn(
-                    "Responsable", options=["Empresa", "Estado", "Comunidad", "Otro"]),
-                "responsable_detalle": "Área / persona",
-                "tema": "Tema",
-                "fecha_limite": st.column_config.DateColumn("Plazo", format="DD/MM/YYYY"),
-                "riesgo_conflicto": st.column_config.SelectboxColumn(
-                    "Riesgo", options=["alto", "medio", "bajo"]),
-                "cita_textual": st.column_config.TextColumn("Cita textual", width="large"),
-            },
-            key="editor_nuevos",
-        )
-        if ext.temas_pendientes:
-            st.warning("**Temas sin acuerdo:** " + "; ".join(ext.temas_pendientes))
-
-        act_nuevos = pd.DataFrame([a.model_dump() for a in ext.actores],
-                                  columns=["nombre", "tipo", "cargo", "organizacion", "comunidad",
-                                           "postura", "influencia", "evidencia"])
-        rel_nuevas = pd.DataFrame([r.model_dump() for r in ext.relaciones],
-                                  columns=["origen", "destino", "tipo", "descripcion"])
-        st.markdown(f"#### 🕸️ {len(act_nuevos)} actores y {len(rel_nuevas)} relaciones detectados")
-        st.caption("Postura hacia la empresa: −2 opositor … +2 aliado. Influencia: 1 a 5. "
-                   "Se suman al Mapa de actores al guardar (si el actor ya existe, se actualiza).")
-        act_editados = st.data_editor(
-            act_nuevos, num_rows="dynamic", width="stretch", hide_index=True, key="editor_actores",
-            column_config={
-                "nombre": "Actor", "cargo": "Cargo", "organizacion": "Organización", "comunidad": "Comunidad",
-                "tipo": st.column_config.SelectboxColumn("Tipo", options=list(actores.SIMBOLO_TIPO)),
-                "postura": st.column_config.NumberColumn("Postura", min_value=-2, max_value=2, step=1),
-                "influencia": st.column_config.NumberColumn("Influencia", min_value=1, max_value=5, step=1),
-                "evidencia": st.column_config.TextColumn("Evidencia (cita)", width="large"),
-            })
-        rel_editadas = st.data_editor(
-            rel_nuevas, num_rows="dynamic", width="stretch", hide_index=True, key="editor_relaciones",
-            column_config={
-                "origen": "Actor A", "destino": "Actor B", "descripcion": "Descripción",
-                "tipo": st.column_config.SelectboxColumn("Relación", options=list(actores.REL_ESTILO)),
-            })
-
-        b1, b2 = st.columns(2)
-        if b1.button("✅ Guardar en el registro", type="primary"):
-            base = editados.dropna(subset=["descripcion"]).copy()
-            base["id"] = [uuid.uuid4().hex[:8] for _ in range(len(base))]
-            base["reunion"], base["fecha_reunion"] = nombre, fecha_r
-            base["comunidad"], base["distrito"] = comunidad, distrito
-            base["beneficiario"], base["cumplido"] = comunidad, False
-            base["fuente"] = "IA (revisado)"
-            st.session_state.registro = registro.normalizar(
-                pd.concat([st.session_state.registro, base], ignore_index=True))
-            try:
-                ext_rev = ExtraccionReunion(
-                    resumen=ext.resumen, compromisos=[], temas_pendientes=ext.temas_pendientes,
-                    actores=act_editados.dropna(subset=["nombre"]).fillna({"postura": 0, "influencia": 3})
-                    .fillna("").to_dict("records"),
-                    relaciones=rel_editadas.dropna(subset=["origen", "destino"]).fillna("").to_dict("records"))
-            except Exception:
-                ext_rev = ext  # si la edicion no es valida, se usa lo que extrajo la IA
-            (st.session_state.actores, st.session_state.relaciones,
-             st.session_state.posturas) = actores.fusionar(
-                st.session_state.actores, st.session_state.relaciones, ext_rev, comunidad,
-                fuente=f"{nombre} ({fecha_r:%d/%m/%Y})", historial=st.session_state.posturas,
-                fecha=fecha_r, reunion=nombre)
-            st.session_state.extraccion = None
-            st.session_state.pop("pptx", None)  # la presentacion se vuelve a armar con los datos nuevos
-            st.toast("✅ Guardado. El Panel ejecutivo y el Mapa de actores ya lo incluyen.")
-            st.rerun()
-        b2.download_button(
-            "⬇️ Descargar ficha de la reunión (.md)",
-            registro.acta_markdown(ext, nombre, fecha_r, comunidad),
-            file_name=f"ficha_{fecha_r:%Y%m%d}.md",
-        )
+    st.info("📱 **En el celular**, usa el **modo campo**: solo el formulario para subir la reunión, con botones grandes. "
+            "Ábrelo con el botón *Modo campo* de la barra lateral o agrega `?campo=1` al final de la dirección.")
+    pantalla_reunion()
 
 # ---------------------------------------------------------------- 2. panel ejecutivo
 with tab_tablero:
