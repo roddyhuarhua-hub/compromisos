@@ -138,7 +138,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 
 | Paquete | Para quién | Módulos |
 |---|---|---|
-| 🌱 Etapa temprana | Proyecto sin acuerdos todavía | Registro de campo + Mapa de actores (seguimiento de líderes) |
+| 🌱 Etapa temprana | Proyecto sin acuerdos todavía | Registro de campo + Grupos de interés (seguimiento de líderes) + Riesgo social y escenarios |
 | ⛏️ Exploración | Acuerdos de acceso y uso superficial | + Compromisos (panel y registro) + Riesgo social y escenarios |
 | 🏭 Operación | Unidad con convenios y conflictividad histórica | + Conflictividad |
 | 🏢 Corporativo | Varios proyectos o unidades | Todo, con la vista de Portafolio |
