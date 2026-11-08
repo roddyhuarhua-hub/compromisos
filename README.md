@@ -31,7 +31,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 | # | Perfil | Lo que más aprendí |
 |---|---|---|
 | 1 | [Gerente de relaciones comunitarias, minera con operación y exploración](docs/research/entrevista_1.md) | Un tablero histórico "no es novedad": lo que vale es anticipar ("si haces esto, pasa esto"), entender el interés de fondo de cada actor y ahorrar las 2 a 3 horas semanales de consolidar Excel. Los procesos se frenan por hechos no sociales (denuncias ambientales, comerciales o policiales). |
-| 2 | _pendiente_ | _pendiente_ |
+| 2 | [Gerente de asuntos sociales, proyecto minero en etapa temprana](docs/research/entrevista_2.md) | Sin acuerdos todavía, lo que necesita es seguir a los líderes: la postura en privado no es la pública. La casa matriz compra por costo-beneficio: hay que mostrar en cuánto tiempo mejora la gestión. Vender por módulos según la etapa del proyecto. |
 | 3 | _pendiente_ | _pendiente_ |
 
 ## 4. Solución e insight
