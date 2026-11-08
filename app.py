@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import (actores, anticipar, conflictos, gerencia, ia, modulos, noticias, ruta, seguimiento, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
+from compromisos import (actores, anticipar, conflictos, gerencia, ia, interlocutores, modulos, noticias, ruta, seguimiento, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
                          portafolio, presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
@@ -229,6 +229,15 @@ def seguimiento_cache(tema: str, busquedas: tuple, regiones: tuple, actores_: tu
 def transcribir_cache(nombre: str, datos: bytes, tipo: str) -> str:
     """El mismo audio no se transcribe dos veces (respuesta instantanea)."""
     return ia.transcribir_audio(nombre, datos, tipo)
+
+
+@st.cache_data(show_spinner=False, ttl=7 * 24 * 3600)
+def transcribir_interlocutores_cache(nombre: str, datos: bytes, tipo: str) -> str:
+    """Transcripcion por turnos (Interlocutor 1, 2...). Si falla, la transcripcion normal."""
+    try:
+        return interlocutores.transcribir(nombre, datos, tipo)
+    except Exception:
+        return ia.transcribir_audio(nombre, datos, tipo)
 
 
 @st.cache_data(show_spinner=False, ttl=7 * 24 * 3600)
@@ -500,13 +509,17 @@ def pantalla_reunion(campo: bool = False) -> None:
                                  type=["mp3", "m4a", "wav", "ogg", "webm", "mp4"])
         grabado = st.audio_input("…o grábala aquí mismo")
         fuente_audio = audio or grabado
+        separar = st.toggle("👥 Separar interlocutores (quién dijo qué)", value=interlocutores.disponible(),
+                            disabled=not interlocutores.disponible(), key="separar_voces",
+                            help="La IA marca cada turno como Interlocutor 1, 2… o con el nombre y cargo de quien "
+                                 "se presenta. Luego puedes poner el nombre de cada uno. Tarda un poco más.")
         if fuente_audio and st.button("Transcribir y extraer", type="primary", disabled=not hay_clave,
                                       width="stretch"):
             with st.status("Procesando la reunión…", expanded=True) as s:
                 s.write(f"🎧 Transcribiendo ({ia.descripcion_proveedor()})…")
                 datos = fuente_audio.getvalue()
                 t0 = time.perf_counter()
-                st.session_state.texto = transcribir_cache(
+                st.session_state.texto = (transcribir_interlocutores_cache if separar else transcribir_cache)(
                     getattr(fuente_audio, "name", "grabacion.wav"), datos,
                     getattr(fuente_audio, "type", None) or "audio/wav")
                 st.session_state.minutos = len(datos) / (16000 * 60)  # aprox. 128 kbps
@@ -542,8 +555,34 @@ def pantalla_reunion(campo: bool = False) -> None:
 
     texto = st.session_state.get("texto", "")
     if texto:
-        with st.expander("Ver transcripción", expanded=False):
-            st.write(texto)
+        ts_ = interlocutores.turnos(texto)
+        if ts_:  # transcripcion por interlocutores: quien llevo la voz y ponerle nombre a cada uno
+            hab = interlocutores.hablantes(ts_)
+            st.markdown(f"#### 👥 {len(hab)} interlocutores en la reunión")
+            PALETA_H = ["#2d4a33", "#2a78d6", "#d03b3b", "#eda100", "#6250d6", "#1baf7a", "#c2410c", "#8a8984"]
+            color_h = {h: PALETA_H[i % len(PALETA_H)] for i, h in enumerate(hab)}
+            st.markdown('<div style="display:flex;height:14px;border-radius:7px;overflow:hidden;margin:4px 0 6px">'
+                        + "".join(f'<div title="{h}" style="width:{d["parte"] * 100:.1f}%;background:{color_h[h]}">'
+                                  f'</div>' for h, d in hab.items()) + "</div>"
+                        + " ".join(f'<span class="badge" style="--c:{color_h[h]}">{h} · {d["parte"]:.0%} · '
+                                   f'{d["turnos"]} turnos</span>' for h, d in hab.items()),
+                        unsafe_allow_html=True)
+            genericos = [h for h in hab if h.lower().startswith("interlocutor")]
+            if genericos:
+                with st.popover("✏️ Poner nombre a los interlocutores"):
+                    nombres_h = {h: st.text_input(h, placeholder="Nombre (cargo)", key=f"nom_{h}") for h in genericos}
+                    if st.button("Aplicar nombres", key="aplicar_nombres"):
+                        st.session_state.texto = interlocutores.renombrar(texto, nombres_h)
+                        st.rerun()
+            with st.expander("Ver transcripción por interlocutor", expanded=False):
+                st.markdown("".join(
+                    f'<div style="margin:0 0 8px;padding-left:10px;border-left:4px solid {color_h[t["hablante"]]}">'
+                    f'<span style="font-size:12px;color:#5b6675">{t["tiempo"]}</span> '
+                    f'<b style="color:{color_h[t["hablante"]]}">{t["hablante"]}</b>: {t["texto"]}</div>'
+                    for t in ts_), unsafe_allow_html=True)
+        else:
+            with st.expander("Ver transcripción", expanded=False):
+                st.write(texto)
 
         if st.button("🧠 Extraer compromisos", type="primary"):
             procesar(texto, fecha_r, f"{nombre}. Comunidad {comunidad}, distrito {distrito}.")

@@ -37,7 +37,7 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 ## 4. Solución e insight
 
 1. Subes el **audio** de la reunión (o lo grabas en la app), una **foto del acta** o el texto.
-2. **Whisper** lo transcribe en español.
+2. **Whisper** lo transcribe en español. Con Gemini, la app además **separa los interlocutores** (Interlocutor 1, 2… o el nombre y cargo de quien se presenta), muestra cuánto habló cada uno y deja ponerles nombre antes de extraer, para atribuir bien cada compromiso y cada postura (`compromisos/interlocutores.py`).
 3. Un **LLM con salida estructurada** (validada con Pydantic) extrae cada compromiso: qué, quién (empresa, Estado, comunidad), plazo en fecha exacta, tema, riesgo de conflicto y la **cita textual** que lo respalda. También lista las demandas que quedaron **sin acuerdo**.
 4. El relacionista **revisa y corrige** en una tabla antes de guardar (la IA propone, la persona decide).
 5. El **panel ejecutivo** muestra un mapa de calor de reuniones con el semáforo de riesgo de cada comunidad, alertas priorizadas, el calendario de vencimientos, la brecha de cumplimiento acumulada, quién incumple y en qué temas. Se descarga el registro (CSV/Excel) y una ficha de la reunión para compartir con la comunidad.

@@ -441,3 +441,23 @@ def test_temas_que_seguimos():
     ctx = sg.a_contexto(s, "Unidad Minera Andina (Apurímac)")
     assert list(ctx["intensidad"]) == [3, 1] and not ctx["validado"].any()
     assert ctx.iloc[1]["tipo"] == "Norma o política en debate"
+
+
+def test_interlocutores():
+    from compromisos import interlocutores as it
+    texto = ("[00:01] Interlocutor 1: Buenos días, iniciamos.\n"
+             "[00:05] Julián Quispe (presidente comunal): El manante ha bajado su caudal\ndesde julio.\n"
+             "[00:20] Interlocutor 2: La empresa se compromete al monitoreo.\n"
+             "[00:31] Interlocutor 1: Pasamos al segundo punto.")
+    ts = it.turnos(texto)
+    assert [t["hablante"] for t in ts] == ["Interlocutor 1", "Julián Quispe (presidente comunal)",
+                                          "Interlocutor 2", "Interlocutor 1"]
+    assert ts[1]["texto"].endswith("desde julio.")  # la linea suelta se une al turno
+    h = it.hablantes(ts)
+    assert h["Interlocutor 1"]["turnos"] == 2 and abs(sum(d["parte"] for d in h.values()) - 1) < 1e-9
+    nuevo = it.renombrar(texto, {"Interlocutor 2": "Luis Paredes (Minera Andina)"})
+    assert "Luis Paredes (Minera Andina): La empresa" in nuevo and "Interlocutor 1:" in nuevo
+    # la demo (Nombre (cargo): texto) tambien se lee por turnos
+    demo = (EJEMPLO / "transcripcion_reunion_demo.txt").read_text(encoding="utf-8")
+    assert len(it.hablantes(it.turnos(demo))) >= 4
+    assert it.turnos("Texto corrido sin hablantes.") == []
