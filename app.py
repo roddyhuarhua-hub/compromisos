@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import (actores, anticipar, conflictos, gerencia, ia, modulos, noticias, ruta, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
+from compromisos import (actores, anticipar, conflictos, gerencia, ia, modulos, noticias, ruta, seguimiento, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
                          portafolio, presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
@@ -218,6 +218,11 @@ def noticias_cache(proyecto: str, _dia: str) -> pd.DataFrame:
         g["alerta"] = pd.to_numeric(g["alerta"], errors="coerce").fillna(0).astype(int)
         nots = g[g["proyecto"] == proyecto].assign(fecha=lambda x: pd.to_datetime(x["fecha"]).dt.date)
     return nots
+
+
+@st.cache_data(show_spinner="Buscando noticias del tema…", ttl=6 * 3600)
+def seguimiento_cache(tema: str, busquedas: tuple, regiones: tuple, actores_: tuple, _dia: str) -> pd.DataFrame:
+    return seguimiento.seguir(tema, list(busquedas), list(regiones), list(actores_))
 
 
 @st.cache_data(show_spinner=False, ttl=7 * 24 * 3600)
@@ -1771,6 +1776,61 @@ if "riesgos" in MODS:
             if st.button("🔄 Buscar noticias de nuevo", key="nots_refrescar"):
                 noticias_cache.clear()
                 st.rerun()
+
+            # --- temas nacionales que seguimos (Ley MAPE, mineria artesanal e ilegal...)
+            st.markdown("#### 🔭 Temas que seguimos")
+            nota("Asuntos nacionales que pueden mover a los dirigentes locales. Se marca cada noticia según esté **en "
+                 "el Congreso** o sea una **movilización**, si toca nuestra región y si menciona a algún actor de "
+                 "nuestro mapa de grupos de interés. Agrega tus propios temas con sus búsquedas.")
+            if "temas_seguidos" not in st.session_state:
+                st.session_state.temas_seguidos = dict(seguimiento.TEMAS_BASE)
+            tema_s = st.selectbox("Tema", list(st.session_state.temas_seguidos), key="tema_seguido")
+            with st.popover("➕ Seguir otro tema"):
+                nuevo_t = st.text_input("Nombre del tema", placeholder="Ej.: Agua y Proyecto Majes")
+                nuevas_q = st.text_area("Búsquedas (una por línea)", placeholder='"Ley de recursos hídricos"\n'
+                                        "agricultores paro agua")
+                if st.button("Agregar tema", key="agregar_tema") and nuevo_t and nuevas_q.strip():
+                    st.session_state.temas_seguidos[nuevo_t] = [q.strip() for q in nuevas_q.splitlines() if q.strip()]
+                    st.rerun()
+            regiones_s = sorted(set(COMUNIDADES.get("region", pd.Series(dtype=str)).dropna().astype(str)))
+            seg = seguimiento_cache(tema_s, tuple(st.session_state.temas_seguidos[tema_s]), tuple(regiones_s),
+                                    tuple(V["actores"]["nombre"]), hoy.isoformat())
+            if seg.empty:
+                st.info("Sin noticias del tema en los últimos 14 días, o sin conexión en este momento.")
+            else:
+                st.markdown('<div class="kpis">' + "".join([
+                    kpi("📰 Noticias (14 días)", f"{len(seg)}", tema_s, "#1f2a37"),
+                    kpi("🏛️ En el Congreso", f"{(seg['etapa'] == 'En el Congreso').sum()}", "dictámenes, votaciones",
+                        "#6250d6"),
+                    kpi("✊ Movilizaciones", f"{(seg['etapa'] == 'Movilización').sum()}", "paros, marchas, bloqueos",
+                        "#d03b3b"),
+                    kpi("📍 En nuestra región", f"{int(seg['en_region'].sum())}", ", ".join(regiones_s)[:40],
+                        "#eda100"),
+                    kpi("👥 Mencionan a nuestros actores", f"{(seg['menciona'] != '').sum()}",
+                        "del mapa de grupos de interés", "#2d4a33"),
+                ]) + "</div>", unsafe_allow_html=True)
+                COLOR_ETAPA = {"En el Congreso": "#6250d6", "Movilización": "#d03b3b", "Otro": "#8a8984"}
+                html_s = []
+                for _, s_ in seg.head(8).iterrows():
+                    c_ = COLOR_ETAPA[s_["etapa"]]
+                    extra = (" · 📍 nuestra región" if s_["en_region"] else "") + \
+                        (f" · 👥 menciona a <b>{s_['menciona']}</b>" if s_["menciona"] else "")
+                    html_s.append(
+                        f'<div class="alerta" style="--c:{c_}"><div class="t"><a href="{s_["enlace"]}" '
+                        f'target="_blank" style="color:#1f2a37;text-decoration:none">{s_["titulo"]}</a></div>'
+                        f'<div class="m"><span class="badge" style="--c:{c_}">{s_["etapa"]}</span> · '
+                        f'{s_["medio"] or "medio"} · {noticias.cuando(s_["fecha"])}{extra}</div></div>')
+                st.markdown("".join(html_s), unsafe_allow_html=True)
+                clave_seg = seg[seg["en_region"] | (seg["menciona"] != "") | (seg["etapa"] == "En el Congreso")]
+                ya_s = set(st.session_state.contexto["descripcion"])
+                clave_seg = clave_seg[~(tema_s + ": " + clave_seg["titulo"]).isin(ya_s)]
+                if not clave_seg.empty and st.button(
+                        f"➕ Pasar {len(clave_seg)} noticia(s) clave a factores externos de {proy_n} (por validar)",
+                        key="seg_a_ctx"):
+                    st.session_state.contexto = anticipar.normalizar_contexto(pd.concat(
+                        [st.session_state.contexto, seguimiento.a_contexto(clave_seg, proy_n)], ignore_index=True),
+                        st.session_state.comunidades)
+                    st.rerun()
 
         with st.expander("🌩️ Factores externos de riesgo: denuncias, cambio de directiva, normas, seguridad"):
             st.caption("Hechos que no son una protesta pero frenan el diálogo: una denuncia ambiental, comercial o "

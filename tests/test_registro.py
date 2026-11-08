@@ -419,3 +419,25 @@ def test_noticias_del_dia():
     assert (~ctx["validado"]).all() and ctx["enlace"].str.startswith("https").all()
     assert anticipar.vigentes(ctx, "C.C. Pucará Alto", uma, hoy).empty  # por validar: no suma al riesgo
     assert noticias.buscar(uma, d["comunidades"], hoy=hoy, bajar=lambda u: None).empty  # sin internet no rompe
+
+
+RSS_MAPE = """<?xml version="1.0"?><rss><channel>
+<item><title>Comisión de Energía y Minas aprueba dictamen de la Ley MAPE - Medio A</title><link>https://ejemplo.pe/a</link>
+<pubDate>Fri, 06 Nov 2026 10:00:00 GMT</pubDate><source url="https://a.pe">Medio A</source></item>
+<item><title>Mineros artesanales de Apurímac anuncian paro; Melquiades Mamani se suma - Medio B</title>
+<link>https://ejemplo.pe/b</link><pubDate>Fri, 06 Nov 2026 11:00:00 GMT</pubDate><source url="https://b.pe">Medio B</source></item>
+</channel></rss>"""
+
+
+def test_temas_que_seguimos():
+    from compromisos import seguimiento as sg
+    s = sg.seguir("Ley MAPE", sg.TEMAS_BASE["Ley MAPE, REINFO y minería artesanal"], ["Apurímac"],
+                  ["Melquiades Mamani", "Prof. Teodoro Llamocca"], hoy=date(2026, 11, 7),
+                  bajar=lambda u: RSS_MAPE.encode())
+    assert len(s) == 2
+    paro = s.iloc[0]  # primero lo que toca nuestra region
+    assert paro["en_region"] and paro["etapa"] == "Movilización" and paro["menciona"] == "Melquiades Mamani"
+    assert s.iloc[1]["etapa"] == "En el Congreso"
+    ctx = sg.a_contexto(s, "Unidad Minera Andina (Apurímac)")
+    assert list(ctx["intensidad"]) == [3, 1] and not ctx["validado"].any()
+    assert ctx.iloc[1]["tipo"] == "Norma o política en debate"
