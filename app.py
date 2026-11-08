@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import (actores, anticipar, conflictos, gerencia, ia, modulos, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
+from compromisos import (actores, anticipar, conflictos, gerencia, ia, modulos, ruta, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
                          portafolio, presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
@@ -1456,6 +1456,48 @@ if "riesgos" in MODS:
                                f"{'subió' if d_ > 0 else 'bajó' if d_ < 0 else 'no cambió'}"
                                f"{f' {abs(d_)} puntos' if d_ else ''}. Sirve para mostrar a la gerencia si las acciones "
                                f"están cambiando la situación.")
+
+            # --- ruta para bajar el riesgo: que actor primero, como abordarlo y en cuanto tiempo
+            st.markdown("#### 🛣️ Ruta para bajar el riesgo: qué camino tomar y en cuánto tiempo")
+            nota("La app arma la secuencia de pasos que más baja el riesgo por mes de trabajo, dado lo ya logrado: un "
+                 "mismo actor puede aparecer dos veces (de opositor a crítico y luego a neutral). Los meses son una "
+                 "referencia de campo: unos 3 meses para mover a un opositor un paso, 2 para un crítico o neutral, "
+                 "1 para que diga en público lo que ya dice en privado y 1 más si hay un agravio antiguo. Con dos "
+                 "frentes en paralelo, el plazo se acorta.")
+            rt = ruta.ruta(riesgos.evaluar, pr, r0["partes"], r0["puntos"], pasos=6,
+                           puentes_de=lambda n_: riesgos.puentes(n_, A_hoy, R_r), **kw_ev)
+            if rt.empty:
+                st.info("No hay un camino sobre los actores que baje el riesgo: el peso está en el contexto, los "
+                        "precedentes o los compromisos vencidos.")
+            else:
+                m_alto = ruta.meses_a_objetivo(rt, r0["puntos"], 60)
+                fin = int(rt["riesgo"].iloc[-1])
+                st.markdown('<div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">' + "".join([
+                    kpi("Riesgo hoy", f"{r0['puntos']}", r0["nivel"].lower(), riesgos.NIVEL_COLOR[r0["nivel"]]),
+                    kpi("Al final de la ruta", f"{fin}", f"{riesgos.nivel(fin).lower()} · en "
+                        f"{rt['mes_acum'].iloc[-1]:.0f} meses", riesgos.NIVEL_COLOR[riesgos.nivel(fin)]),
+                    kpi("Sale de riesgo alto", f"{m_alto:.0f} meses" if m_alto else "–",
+                        "siguiendo la ruta" if m_alto else "hace falta actuar también sobre el contexto",
+                        "#2d4a33"),
+                ]) + "</div>", unsafe_allow_html=True)
+                q1, q2 = st.columns([1.25, 1])
+                with q1:
+                    html_r = []
+                    for r_ in rt.itertuples():
+                        col_r = riesgos.NIVEL_COLOR[riesgos.nivel(r_.riesgo)]
+                        cambio_r = ("que diga en público lo que dice en privado" if r_.doble else
+                                    f"{actores.POSTURA_TXT[r_.de]} → {actores.POSTURA_TXT[r_.a]}")
+                        html_r.append(f"""
+<div class="evento" style="border-left:6px solid {col_r};padding:9px 14px">
+  <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+    <div style="font-weight:700">Paso {r_.paso} · {r_.nombre} <span style="color:#5b6675;font-weight:500">· {r_.rol}</span></div>
+    <div style="white-space:nowrap;font-size:12.5px;color:#5b6675">mes {r_.mes_acum:.0f} · <b style="color:{col_r}">{r_.riesgo}</b></div></div>
+  <div style="font-size:13px;margin:2px 0"><b>{cambio_r}</b> en ~{r_.meses:.0f} {'mes' if r_.meses == 1 else 'meses'} (−{r_.baja} pts)</div>
+  <div style="font-size:12.5px;color:#5b6675">Cómo abordarlo: {r_.como}</div>
+</div>""")
+                    st.markdown("".join(html_r), unsafe_allow_html=True)
+                with q2:
+                    st.plotly_chart(ruta.figura_ruta(rt, r0["puntos"]), width="stretch", config=cfg("ruta_riesgo"))
 
             # --- quien puede frenar el proceso
             st.markdown("#### 🚧 Actores con capacidad de veto y estrategia de relacionamiento")

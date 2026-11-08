@@ -363,8 +363,25 @@ def test_vencidos_por_prioridad_y_validacion():
 
 def test_modulos_por_cliente():
     from compromisos import modulos
-    assert modulos.leer("temprana") == ["reunion", "actores"]
+    assert modulos.leer("temprana") == ["reunion", "actores", "riesgos"]
     assert modulos.leer("riesgos, actores") == ["reunion", "actores", "riesgos"]  # la captura va siempre
     assert modulos.leer("") is None and modulos.leer("inventado") == ["reunion"]
     assert modulos.leer("corporativo") == list(modulos.MODULOS)
-    assert modulos.paquete_de(["actores"]) == "temprana"
+    assert modulos.paquete_de(["actores", "riesgos"]) == "temprana"
+
+
+def test_ruta_para_bajar_el_riesgo():
+    from compromisos import anticipar, riesgos as rg, ruta
+    d = _datos_riesgo()
+    ctx = anticipar.normalizar_contexto(pd.read_csv(EJEMPLO / "contexto_demo.csv"))
+    p1 = d["P"].set_index("id").loc["P1"].copy()
+    p1["id"] = "P1"
+    kw = dict(partes=d["PA"], A=d["A"], H=d["H"], conf=d["conf"], reg=d["reg"], hoy=d["hoy"], contexto=ctx)
+    base = rg.evaluar(p1, **kw)
+    rt = ruta.ruta(rg.evaluar, p1, base["partes"], base["puntos"], pasos=6,
+                   puentes_de=lambda n: rg.puentes(n, d["A"], d["R"]), **kw)
+    assert len(rt) >= 3 and (rt["baja"] > 0).all()
+    assert list(rt["riesgo"]) == sorted(rt["riesgo"], reverse=True)  # cada paso baja el riesgo
+    assert rt["mes_acum"].is_monotonic_increasing and rt["como"].str.len().min() > 20
+    assert ruta.meses_paso(-2, False, "Agravio antiguo") == 4 and ruta.meses_paso(-1, True) == 1
+    assert ruta.figura_ruta(rt, base["puntos"]).data

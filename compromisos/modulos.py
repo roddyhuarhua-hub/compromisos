@@ -22,8 +22,8 @@ MODULOS = {
 SIEMPRE = ["reunion"]  # la captura de reuniones alimenta a todos los demas modulos
 
 PAQUETES = {
-    "temprana": ("🌱 Etapa temprana", ["reunion", "actores"],
-                 "Proyecto sin acuerdos todavía: mapa de actores y seguimiento de líderes"),
+    "temprana": ("🌱 Etapa temprana", ["reunion", "actores", "riesgos"],
+                 "Proyecto sin acuerdos todavía: grupos de interés, seguimiento de líderes y escenarios de riesgo"),
     "exploracion": ("⛏️ Exploración", ["reunion", "actores", "compromisos", "riesgos"],
                     "Acuerdos de acceso y uso superficial: suma compromisos y riesgos de cada proceso"),
     "operacion": ("🏭 Operación", ["reunion", "actores", "compromisos", "conflictividad", "riesgos"],
