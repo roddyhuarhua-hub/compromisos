@@ -49,19 +49,25 @@ from streamlit.delta_generator import DeltaGenerator
 if not getattr(DeltaGenerator, "_compacto", False):
     _plotly_original = DeltaGenerator.plotly_chart
 
+    def _compactar(fig):
+        """En celular usa la version compacta; si algo falla, muestra el grafico normal."""
+        if not st.session_state.get("_movil"):
+            return fig
+        try:
+            from compromisos import movil
+            return movil.compacto(fig)
+        except Exception:
+            return fig
+
     def _plotly_movil(self, figure_or_data, *a, **k):
-        if st.session_state.get("_movil"):
-            figure_or_data = visual.compacto(figure_or_data)
-        return _plotly_original(self, figure_or_data, *a, **k)
+        return _plotly_original(self, _compactar(figure_or_data), *a, **k)
 
     DeltaGenerator.plotly_chart = _plotly_movil
     DeltaGenerator._compacto = True
     _st_original = st.plotly_chart  # st.plotly_chart ya viene "pegado" al contenedor principal
 
     def _st_plotly_movil(figure_or_data, *a, **k):
-        if st.session_state.get("_movil"):
-            figure_or_data = visual.compacto(figure_or_data)
-        return _st_original(figure_or_data, *a, **k)
+        return _st_original(_compactar(figure_or_data), *a, **k)
 
     st.plotly_chart = _st_plotly_movil
 st.session_state["_movil"] = MOVIL
