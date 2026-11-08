@@ -12,12 +12,12 @@ from __future__ import annotations
 
 # clave -> (nombre en pantalla, para que sirve)
 MODULOS = {
-    "reunion": ("🎙️ Nueva reunión", "Subir audio, foto del acta o texto; la IA extrae compromisos y actores"),
-    "actores": ("🕸️ Mapa de actores", "Quién es quién, postura pública y privada, red y seguimiento de líderes"),
-    "compromisos": ("📊 Compromisos", "Panel ejecutivo de compromisos, vencidos por prioridad, registro y descargas"),
-    "conflictividad": ("🔥 Conflictividad", "Historia de paros, bloqueos y tomas en el territorio"),
-    "riesgos": ("🎯 Riesgos y decisiones", "Riesgo de paralización por proceso, 'si haces esto, pasa esto'"),
-    "portafolio": ("🗂️ Portafolio", "Varios proyectos o unidades en una sola mirada corporativa"),
+    "reunion": ("🎙️ Registro de campo", "Subir audio, foto del acta o texto; la IA extrae compromisos y actores"),
+    "actores": ("🕸️ Grupos de interés", "Quién es quién, postura pública y privada, red y seguimiento de líderes"),
+    "compromisos": ("📊 Gestión de compromisos", "Panel ejecutivo de compromisos, vencidos por prioridad, registro y descargas"),
+    "conflictividad": ("🔥 Conflictividad social", "Historia de paros, bloqueos y tomas en el territorio"),
+    "riesgos": ("🎯 Riesgo social y escenarios", "Riesgo de paralización por proceso, 'si haces esto, pasa esto'"),
+    "portafolio": ("🏢 Vista corporativa", "Varios proyectos o unidades en una sola mirada corporativa"),
 }
 SIEMPRE = ["reunion"]  # la captura de reuniones alimenta a todos los demas modulos
 

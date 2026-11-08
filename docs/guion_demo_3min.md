@@ -2,7 +2,7 @@
 
 **0:00 – 0:30 · Problema.** "Soy Roddy, historiador y relacionista comunitario. En cada mesa de diálogo se asumen compromisos: agua, empleo, monitoreo. Se anotan en un cuaderno o en un Excel, y meses después nadie recuerda quién prometió qué. Muchos conflictos se reactivan por un compromiso incumplido."
 
-**0:30 – 1:40 · Flujo principal.** Pestaña *Nueva reunión* → *Audio de la reunión* → subir la grabación (2 min) → *Transcribir y extraer* → *Extraer compromisos*. Mostrar: resumen, 7 compromisos con responsable, plazo, riesgo y la **cita textual** que lo respalda; el tema sin acuerdo (posta de salud). Corregir un plazo en la tabla → *Guardar en el registro* → descargar la ficha.
+**0:30 – 1:40 · Flujo principal.** Pestaña *Registro de campo* → *Audio de la reunión* → subir la grabación (2 min) → *Transcribir y extraer* → *Extraer compromisos*. Mostrar: resumen, 7 compromisos con responsable, plazo, riesgo y la **cita textual** que lo respalda; el tema sin acuerdo (posta de salud). Corregir un plazo en la tabla → *Guardar en el registro* → descargar la ficha.
 
 **1:40 – 2:30 · Seguimiento.** Pestaña *Tablero*: 13 compromisos vencidos, 38 % de cumplimiento, alertas ordenadas por atraso. Filtrar por "Empresa" y por "Agua": "esto es lo que el superintendente necesita ver el lunes en la mañana".
 

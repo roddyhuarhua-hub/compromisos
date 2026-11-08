@@ -143,8 +143,49 @@ html, body, [class*="css"], .stMarkdown, .stTextInput, .stButton button { font-f
 .campo span { display: block; font-size: 12.5px; color: rgba(255,255,255,0.85); }
 div[data-testid="stPlotlyChart"] { background: #fff; border: 1px solid rgba(31,42,55,0.08); border-radius: 14px;
                                    padding: 6px 8px; box-shadow: 0 1px 2px rgba(16,24,40,0.04); }
+/* ---- mascara ejecutiva: fondo suave, navegacion en pildoras, titulos con acento, tarjetas con relieve ---- */
+.stApp { background: linear-gradient(180deg, #eef2ef 0%, #f6f7f6 320px); }
+.stTabs [data-baseweb="tab-list"], .stTabs [role="tablist"] { background: #fff; padding: 6px; border-radius: 14px;
+    gap: 4px; box-shadow: 0 2px 8px rgba(16,24,40,0.06); border: 1px solid rgba(31,42,55,0.06); flex-wrap: wrap;
+    border-bottom: 1px solid rgba(31,42,55,0.06); }
+.stTabs [data-baseweb="tab"], .stTabs [role="tab"] { border-radius: 10px; color: #3b4654; height: auto;
+    padding: 8px 14px; border: none; }
+.stTabs [role="tab"]:hover { background: #eef2ef; }
+.stTabs [data-baseweb="tab"][aria-selected="true"], .stTabs [role="tab"][aria-selected="true"] {
+    background: #2d4a33; color: #fff; }
+.stTabs [role="tab"][aria-selected="true"] p { color: #fff; font-weight: 600; }
+.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"],
+.stTabs .react-aria-SelectionIndicator { display: none; }
+.stTabs [data-baseweb="tab-panel"] { padding-top: 16px; }
+.stMarkdown h3 { font-weight: 700; color: #1f2a37; letter-spacing: -.01em; }
+.stMarkdown h4 { font-weight: 700; color: #1f2a37; font-size: 17px; border-left: 4px solid #2d4a33;
+                 padding: 2px 0 2px 10px; margin: 10px 0 8px 0; letter-spacing: -.01em; }
+.stMarkdown h5 { font-weight: 600; color: #3b4654; font-size: 14px; text-transform: uppercase; letter-spacing: .04em; }
+.kpi { box-shadow: 0 4px 14px rgba(16,24,40,0.06); background: linear-gradient(180deg, #fff 0%,
+       color-mix(in srgb, var(--c) 5%, white) 100%); transition: transform .15s; }
+.kpi:hover { transform: translateY(-2px); }
+.kpi .val { font-size: 32px; letter-spacing: -.02em; }
+.kpi .lab { text-transform: uppercase; letter-spacing: .04em; font-size: 11.5px; font-weight: 600; }
+.card, .evento, div[data-testid="stPlotlyChart"] { box-shadow: 0 4px 14px rgba(16,24,40,0.05); }
+.hero { box-shadow: 0 10px 30px rgba(26,48,32,0.25);
+        background-image: radial-gradient(circle at 85% 20%, rgba(255,255,255,0.10) 0, transparent 40%),
+                          linear-gradient(120deg, #142618 0%, #2d4a33 55%, #3f6b4a 100%); }
+.hero .chip { font-weight: 600; }
+div[data-testid="stExpander"] details { background: #fff; border-radius: 12px; }
+section[data-testid="stSidebar"] { background: #fbfcfb; }
+@media (max-width: 640px) {
+  .stTabs [data-baseweb="tab-list"], .stTabs [role="tablist"] { padding: 4px; flex-wrap: nowrap; overflow-x: auto; }
+  .stTabs [role="tab"], .stTabs [data-baseweb="tab"] { padding: 6px 10px; white-space: nowrap; flex: 0 0 auto; }
+  .hero .por { display: none; }
+  .kpi .val { font-size: 24px; } }
 </style>
 """, unsafe_allow_html=True)
+
+
+def nota(texto: str) -> None:
+    """Explicacion de un grafico: solo se muestra si el usuario lo pide (menos texto, mas datos)."""
+    if st.session_state.get("ver_detalle"):
+        st.caption(texto)
 
 
 def kpi(lab: str, val: str, sub: str, color: str) -> str:
@@ -265,7 +306,7 @@ with st.sidebar:
     PROY = st.selectbox("🗂️ Proyecto", [portafolio.TODOS] + PROYECTOS, key="proyecto",
                         on_change=sincronizar_proyecto, args=("proyecto",),
                         help="Elige un proyecto para ver solo sus comunidades, actores, conflictos y procesos. "
-                             "Con «Todos» ves la mirada corporativa en la pestaña Portafolio.")
+                             "Con «Todos» ves la mirada corporativa en la pestaña Vista corporativa.")
     if st.session_state.get("_proy_previo") != PROY:  # la presentacion general depende del proyecto
         st.session_state.pop("pptx", None)
         st.session_state["_proy_previo"] = PROY
@@ -292,6 +333,8 @@ with st.sidebar:
     if not CAMPO:
         st.link_button("📱 Modo campo (celular)", "?campo=1", width="stretch",
                        help="Solo el formulario para subir reuniones, asambleas y actas, pensado para el celular.")
+    st.toggle("ℹ️ Ver explicaciones de cada gráfico", key="ver_detalle",
+              help="Apagado, la app muestra solo datos y gráficos. Encendido, cada gráfico trae cómo leerlo.")
     with st.expander("📖 Glosario: qué significa cada término"):
         st.markdown("\n".join(f"- **{t}.** {d}" for t, d in gerencia.GLOSARIO.items()))
     st.divider()
@@ -530,7 +573,7 @@ def pantalla_reunion(campo: bool = False) -> None:
               if campo else st.container()):
             st.markdown(f"#### 🕸️ {len(act_nuevos)} actores y {len(rel_nuevas)} relaciones detectados")
             st.caption("Postura hacia la empresa: −2 opositor … +2 aliado. Influencia: 1 a 5. "
-                       "Se suman al Mapa de actores al guardar (si el actor ya existe, se actualiza).")
+                       "Se suman a Grupos de interés al guardar (si el actor ya existe, se actualiza).")
             act_editados = st.data_editor(
                 act_nuevos, num_rows="dynamic", width="stretch", hide_index=True, key="editor_actores",
                 column_config={
@@ -572,7 +615,7 @@ def pantalla_reunion(campo: bool = False) -> None:
                 fecha=fecha_r, reunion=nombre)
             st.session_state.extraccion = None
             st.session_state.pop("pptx", None)  # la presentacion se vuelve a armar con los datos nuevos
-            st.toast("✅ Guardado. El Panel ejecutivo y el Mapa de actores ya lo incluyen.")
+            st.toast("✅ Guardado. Gestión de compromisos y Grupos de interés ya lo incluyen.")
             st.rerun()
         b2.download_button(
             "⬇️ Descargar ficha de la reunión (.md)",
@@ -596,8 +639,7 @@ st.markdown(f"""
   <img class="marca" src="data:image/png;base64,{LOGO_BLANCO}" alt="Confluentia">
   <div class="por">Confluentia · Inteligencia social para decisiones estratégicas en territorio</div>
   <h1>🤝 Compromisos</h1>
-  <p>De la mesa de diálogo al seguimiento de cada acuerdo. La IA escucha la reunión, extrae quién prometió qué
-  y para cuándo, y alerta antes de que un compromiso incumplido se convierta en conflicto.</p>
+  <p>Gestión de compromisos, grupos de interés y riesgo social, con IA.</p>
   <div class="chips">
     <span class="chip">📍 {base_df['comunidad'].nunique()} comunidades</span>
     <span class="chip extra">🗓️ {base_df['reunion'].nunique()} reuniones</span>
@@ -611,9 +653,10 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # solo las pestanas de los modulos que el cliente contrato (compromisos/modulos.py)
-ETIQUETAS = {"portafolio": "🗂️ Portafolio", "compromisos": "📊 Panel ejecutivo", "actores": "🕸️ Mapa de actores",
-             "conflictividad": "🔥 Conflictividad", "riesgos": "🎯 Riesgos y decisiones",
-             "reunion": "🎙️ Nueva reunión", "registro": "📋 Registro y descargas"}
+ETIQUETAS = {"portafolio": "🏢 Vista corporativa", "compromisos": "📊 Gestión de compromisos",
+             "actores": "🕸️ Grupos de interés", "conflictividad": "🔥 Conflictividad social",
+             "riesgos": "🎯 Riesgo social y escenarios", "reunion": "🎙️ Registro de campo",
+             "registro": "📋 Base de datos y reportes"}
 ACTIVAS = [k for k in ETIQUETAS if ("compromisos" if k == "registro" else k) in MODS]
 TABS = dict(zip(ACTIVAS, st.tabs([ETIQUETAS[k] for k in ACTIVAS])))
 tab_portafolio, tab_tablero, tab_actores, tab_conflictos, tab_riesgos, tab_reunion, tab_registro = (
@@ -622,7 +665,7 @@ tab_portafolio, tab_tablero, tab_actores, tab_conflictos, tab_riesgos, tab_reuni
 # ---------------------------------------------------------------- 0. portafolio
 if "portafolio" in MODS:
     with tab_portafolio:
-        st.markdown("La **mirada corporativa**: todos los proyectos de la empresa o de la consultora en una sola "
+        nota("La **mirada corporativa**: todos los proyectos de la empresa o de la consultora en una sola "
                     "pantalla, aunque sus comunidades y actores no tengan relación entre sí (una unidad minera, frentes "
                     "de exploración en otras regiones o clientes distintos). Para trabajar un proyecto en detalle, "
                     "elígelo en **🗂️ Proyecto**, en la barra lateral: todas las pestañas se filtran.")
@@ -641,10 +684,10 @@ if "portafolio" in MODS:
                     f"de {int(res['compromisos'].sum())} registrados", COLOR_ESTADO["Vencido"]),
                 kpi("🎯 Procesos en riesgo alto", f"{int(res['riesgo_alto'].sum())}",
                     f"de {int(res['procesos'].sum())} en seguimiento", "#eda100"),
-                kpi("🔗 Actores transversales", f"{len(trans)}", "presentes en varios proyectos", "#6250d6"),
+                kpi("🔗 Grupos de interés transversales", f"{len(trans)}", "presentes en varios proyectos", "#6250d6"),
             ]) + "</div>", unsafe_allow_html=True)
 
-            st.markdown("#### Cómo está cada proyecto")
+            st.markdown("#### Índice de riesgo social por proyecto")
             NIVEL_ICONO = {"Alto": "🔴", "Medio": "🟡", "Bajo": "🟢"}
             for fila in range(0, len(res), 3):
                 for col_p, (_, p_) in zip(st.columns(3), res.iloc[fila:fila + 3].iterrows()):
@@ -653,7 +696,7 @@ if "portafolio" in MODS:
 <div class="evento" style="border-top:6px solid {p_['color']};{'box-shadow:0 0 0 2px ' + p_['color'] + ';' if elegido else ''}">
 <div style="font-size:16px;font-weight:700">{p_['proyecto']}</div>
 <div style="color:#5b6675;font-size:12.5px;margin-bottom:8px">{p_['tipo']} · {p_['fase']} · responsable: {p_['responsable'] or '—'}</div>
-<div style="font-size:14px;margin-bottom:6px">{NIVEL_ICONO.get(p_['nivel'], '⚪')} <b>Alerta {p_['nivel'].lower()}</b>
+<div style="font-size:14px;margin-bottom:6px">{NIVEL_ICONO.get(p_['nivel'], '⚪')} <b>Riesgo social {p_['nivel'].lower()}</b>
 <span style="color:#5b6675">({int(p_['alerta'])}/100)</span></div>
 <table style="width:100%;font-size:13px;border-collapse:collapse">
 <tr><td style="color:#5b6675;padding:2px 0">Comunidades</td><td style="text-align:right"><b>{p_['comunidades']}</b> ({p_['criticas']} críticas)</td></tr>
@@ -665,10 +708,10 @@ if "portafolio" in MODS:
 </table>
 <div style="font-size:12.5px;margin-top:8px"><span style="color:#5b6675">Próximo hito:</span> {p_['proximo_hito']}</div>
 </div>""", unsafe_allow_html=True)
-            st.caption("Alerta del proyecto (0–100) = 40% el índice de riesgo de su comunidad más crítica + 30% el riesgo "
+            nota("Índice de riesgo social del proyecto (0–100) = 40% el índice de riesgo de su comunidad más crítica + 30% el riesgo "
                        "de su proceso más expuesto + 30% los días de paralización de los últimos 3 años.")
 
-            st.markdown("#### 🗺️ Todos los ámbitos en un mapa")
+            st.markdown("#### 🗺️ Huella territorial de los proyectos")
             reg_all = registro.con_estado(DATOS["registro"], hoy)
             ind_all = visual.indice_comunidades(reg_all, DATOS["comunidades"]) if not reg_all.empty else pd.DataFrame()
             st.plotly_chart(portafolio.figura_mapa(res, DATOS["comunidades"], ind_all), width="stretch",
@@ -676,7 +719,7 @@ if "portafolio" in MODS:
             st.plotly_chart(portafolio.figura_alerta(res), width="stretch", config=cfg("alerta_por_proyecto"))
             st.plotly_chart(portafolio.figura_comparacion(res), width="stretch", config=cfg("compromisos_por_proyecto"))
 
-            st.markdown("#### 🔗 Actores transversales")
+            st.markdown("#### 🔗 Grupos de interés transversales")
             if trans.empty:
                 st.info("Ningún actor aparece en más de un proyecto.")
             else:
@@ -758,12 +801,12 @@ if "compromisos" in MODS:
             reuniones["lon"] = reuniones["lon"] + rng.normal(0, 0.012, len(reuniones))
             c1, c2 = st.columns([1.75, 1])
             with c1:
-                st.markdown("#### 🗺️ Mapa de calor de reuniones y semáforo por comunidad")
+                st.markdown("#### 🗺️ Mapa de relacionamiento y semáforo social")
                 fondo = st.segmented_control("Fondo del mapa", list(visual.FONDOS), default="🛰️ Satélite",
                                              label_visibility="collapsed") or "🛰️ Satélite"
                 st.plotly_chart(visual.mapa(ind, reuniones, fondo=fondo), width="stretch",
                                 config=cfg("mapa_comunidades", zoom=True))
-                st.caption("Halo: intensidad de reuniones. Círculos: comunidades, coloreadas por índice de riesgo; "
+                nota("Halo: intensidad de reuniones. Círculos: comunidades, coloreadas por índice de riesgo; "
                            "el tamaño crece con los compromisos vencidos. Usa la rueda del mouse para acercar.")
             with c2:
                 st.markdown("#### 🚦 Semáforo social")
@@ -777,13 +820,13 @@ if "compromisos" in MODS:
                         f'<div class="bar"><div style="width:{max(4, r["indice"])}%; --c:{col}"></div></div></div>'
                         f'<span class="badge" style="--c:{col}">{r["semaforo"]} · {r["indice"]:.0f}</span></div>')
                 st.markdown('<div class="card">' + "".join(filas) + "</div>", unsafe_allow_html=True)
-                st.markdown("##### Cumplimiento global")
+                st.markdown("##### Índice de cumplimiento")
                 st.plotly_chart(visual.gauge(tasa, 200), width="stretch", config=cfg("cumplimiento"))
 
             # --- alertas + estados
             c3, c4 = st.columns([1.2, 1])
             with c3:
-                st.markdown("#### 🔔 Vencidos: atender primero")
+                st.markdown("#### 🔔 Compromisos vencidos: prioridad de atención")
                 # la prioridad no es solo el atraso: pesa el poder de la comunidad para paralizar (sus dirigentes
                 # opositores con influencia y su historia de paros)
                 poder_c = gerencia.poder_comunidades(actores.al_corte(V["actores"], V["posturas"], hoy),
@@ -813,7 +856,7 @@ if "compromisos" in MODS:
                     st.caption(f"🟡 Además, {n_pv} compromiso{'s' * (n_pv != 1)} por vencer en los próximos {registro.DIAS_ALERTA} días: "
                                "todavía están en plazo (ver el calendario).")
             with c4:
-                st.markdown("#### Estado de los compromisos")
+                st.markdown("#### Estado de la cartera de compromisos")
                 st.plotly_chart(visual.dona_estados(df, registro.ORDEN_ESTADO), width="stretch",
                                 config=cfg("estados"))
 
@@ -825,7 +868,7 @@ if "compromisos" in MODS:
                 with v2:
                     st.markdown("##### Vencidos por comunidad y prioridad")
                     st.markdown(gerencia.tabla_html(pr_v), unsafe_allow_html=True)
-                    st.caption("La prioridad no depende solo del atraso. Suma el tema del compromiso (agua, tierras, "
+                    nota("La prioridad no depende solo del atraso. Suma el tema del compromiso (agua, tierras, "
                                "salud y empleo son riesgo alto) y el **poder de la comunidad para paralizar**: sus "
                                "dirigentes opositores con influencia y sus paros de los últimos 5 años. Un mismo vencido "
                                "es P1 donde hay dirigentes que ya paralizaron y P2 o P3 donde nunca hubo paro. "
@@ -845,7 +888,7 @@ if "actores" in MODS:
     with tab_actores:
         selector_proyecto("proy_actores")
         A, R, H = V["actores"], V["relaciones"], V["posturas"]
-        st.markdown("Cada reunión que procesa la IA alimenta este mapa: **quién es quién** en cada comunidad, "
+        nota("Cada reunión que procesa la IA alimenta este mapa: **quién es quién** en cada comunidad, "
                     "su postura hacia la empresa, su influencia y **cómo se relacionan** entre caseríos y comunidades. "
                     "Como las posturas cambian, cada reunión deja una *foto* fechada: mueve la línea de tiempo para "
                     "ver el mapa como estaba en otro momento.")
@@ -890,7 +933,7 @@ if "actores" in MODS:
                                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
                 q2.download_button("⬇️ Imágenes PNG (.zip)", la_[1][1], width="stretch", key="dl_act_zip",
                                    file_name=f"confluentia_mapa_actores_{corte:%Y%m%d}.zip", mime="application/zip")
-            st.caption("Cada gráfico de esta pestaña también se baja suelto con el ícono 📷 al pasar el mouse.")
+            nota("Cada gráfico de esta pestaña también se baja suelto con el ícono 📷 al pasar el mouse.")
 
         if M.empty:
             st.info("No hay actores con estos filtros.")
@@ -913,20 +956,20 @@ if "actores" in MODS:
 
             c1, c2 = st.columns([1.75, 1])
             with c1:
-                st.markdown("#### 🕸️ Red de relaciones e influencias")
+                st.markdown("#### 🕸️ Red de influencia")
                 foco = st.selectbox("Resaltar un actor y sus vínculos", ["(ninguno)"] + M["nombre"].tolist(),
                                     key="act_foco")
                 st.plotly_chart(actores.figura_red(G, M, resaltar=None if foco == "(ninguno)" else foco),
                                 width="stretch", config=cfg("red_actores", zoom=True))
-                st.caption("Color: postura hacia la empresa. Tamaño: influencia. Forma: ● comunidad, ■ Estado/autoridad, "
+                nota("Color: postura hacia la empresa. Tamaño: influencia. Forma: ● comunidad, ■ Estado/autoridad, "
                            "◆ empresa, ▲ ONG/iglesia/medios. Borde oscuro: actor puente. Cada grupo es una comunidad.")
                 if MOVIL:
                     st.info("📱 En el celular: toca un punto para ver quién es, abre el gráfico en pantalla completa "
                             "(⛶) y usa dos dedos para acercar. Para ver los nombres, elige una comunidad arriba o "
                             "resalta un actor.")
             with c2:
-                st.markdown("#### ⭐ Actores clave de la red")
-                st.caption("Intermediación: qué tanto pasa por este actor la comunicación entre los demás "
+                st.markdown("#### ⭐ Actores clave (centralidad)")
+                nota("Intermediación: qué tanto pasa por este actor la comunicación entre los demás "
                            "(si se cae o cambia de postura, la red se reconfigura).")
                 filas = []
                 for _, r in M.head(8).iterrows():
@@ -942,7 +985,7 @@ if "actores" in MODS:
 
             c3, c4 = st.columns(2)
             with c3:
-                st.markdown("#### 🎯 Matriz poder – postura")
+                st.markdown("#### 🎯 Matriz de poder y posición")
                 st.plotly_chart(actores.matriz_poder_interes(M), width="stretch", config=cfg("matriz_poder_postura"))
                 criticos = M[(M["postura"] < 0) & (M["influencia"] >= 4)].sort_values(
                     ["influencia", "postura", "vinculos"], ascending=[False, True, False]).head(6)
@@ -951,7 +994,7 @@ if "actores" in MODS:
                         f"{r['nombre']} ({(r['comunidad'] or r['organizacion']).replace('C.C. ', '')})"
                         for _, r in criticos.iterrows()))
             with c4:
-                st.markdown("#### ⚖️ Balance de posturas por comunidad")
+                st.markdown("#### ⚖️ Balance de posiciones por comunidad")
                 if (M["comunidad"] != "").any():
                     st.plotly_chart(actores.balance_comunidades(M), width="stretch", config=cfg("balance_posturas"))
                 st.markdown("#### 🔗 Relaciones entre comunidades")
@@ -967,7 +1010,7 @@ if "actores" in MODS:
                         hide_index=True, width="stretch")
 
         # ------------------------------------------------ dinamica: cambios de postura
-        st.markdown("### ⏳ Dinámica de posturas en el territorio")
+        st.markdown("### ⏳ Evolución de posiciones en el territorio")
         d1, d2 = st.columns([1, 2.2])
         periodo = d1.radio("Comparar contra", ["3 meses atrás", "6 meses atrás", "1 año atrás", "Primer registro"],
                            index=1, key="act_periodo")
@@ -989,14 +1032,14 @@ if "actores" in MODS:
                      f"*{actores.POSTURA_TXT[r['ahora']]}* ({r['fecha_cambio']:%d/%m/%Y}, {r['reunion']}). "
                      f"“{r['evidencia']}”")
         with d2:
-            st.markdown(f"#### Quién cambió de postura desde el {desde:%d/%m/%Y}")
+            st.markdown(f"#### Cambios de posición desde el {desde:%d/%m/%Y}")
             if cam.empty:
                 st.info("Nadie cambió de postura en este periodo.")
             else:
                 st.plotly_chart(actores.figura_cambios(cam.head(14)), width="stretch", config=cfg("cambios_postura"))
-                st.caption("○ postura antes → ● postura ahora. Naranja: se aleja de la empresa; azul: se acerca. "
+                nota("○ postura antes → ● postura ahora. Naranja: se aleja de la empresa; azul: se acerca. "
                            "Ordenado por riesgo (cuánto se movió × su influencia). Pasa el mouse para ver la evidencia.")
-        st.markdown("#### 📈 Trayectoria de cada actor, reunión tras reunión")
+        st.markdown("#### 📈 Trayectoria de posición por actor")
         # por defecto: los actores influyentes con la historia mas movida (mas posturas distintas)
         mov_h = (Hf[Hf["fecha"] <= corte].groupby("nombre")
                  .agg(n=("postura", "nunique"), inf=("influencia", "max"), reg=("postura", "size")))
@@ -1045,7 +1088,7 @@ if "actores" in MODS:
 if "conflictividad" in MODS:
     with tab_conflictos:
         C = V["conflictos"]
-        st.markdown("La memoria del territorio: **paralizaciones, bloqueos de vías, tomas y otras manifestaciones** "
+        nota("La memoria del territorio: **paralizaciones, bloqueos de vías, tomas y otras manifestaciones** "
                     "contra la empresa, con el lugar exacto donde ocurrieron, quién convocó, qué exigían y cómo terminó. "
                     "Sirve para anticipar: los conflictos suelen repetirse en los mismos lugares y por las mismas demandas.")
         if C.empty:
@@ -1108,7 +1151,7 @@ if "conflictividad" in MODS:
                                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
                     q2.download_button("⬇️ Imágenes PNG (.zip)", lc[1][1], width="stretch", key="dl_conf_zip",
                                        file_name=f"confluentia_conflictividad_{hoy:%Y%m%d}.zip", mime="application/zip")
-                st.caption("Cada gráfico de esta pestaña también se baja suelto con el ícono 📷 al pasar el mouse.")
+                nota("Cada gráfico de esta pestaña también se baja suelto con el ícono 📷 al pasar el mouse.")
 
             if Cf.empty:
                 st.info("No hay eventos con estos filtros.")
@@ -1120,7 +1163,7 @@ if "conflictividad" in MODS:
                                                    label_visibility="collapsed", key="conf_fondo") or "🛰️ Satélite"
                     st.plotly_chart(conflictos.mapa(Cf, COMS_C, fondo_c), width="stretch",
                                     config=cfg("mapa_conflictos", zoom=True))
-                    st.caption("Calor: lugares con más días de paralización. Cada punto es un evento, coloreado por tipo; "
+                    nota("Calor: lugares con más días de paralización. Cada punto es un evento, coloreado por tipo; "
                                "el tamaño crece con la duración. Pasa el mouse para ver quién convocó y qué exigían.")
                 with m2:
                     st.markdown("#### 🕑 Eventos más recientes")
@@ -1141,7 +1184,7 @@ if "conflictividad" in MODS:
                         st.warning("**Puntos calientes que se repiten:** " + "; ".join(
                             f"{l} ({r.n} eventos, {r.dias} días)" for l, r in lugares.head(3).iterrows()))
 
-                st.markdown("#### 📜 Cronología del conflicto por comunidad")
+                st.markdown("#### 📜 Línea de tiempo de la conflictividad")
                 st.plotly_chart(conflictos.cronologia(Cf), width="stretch", config=cfg("cronologia_conflictos"))
                 st.caption("Tamaño: duración de la medida. Borde negro: hubo violencia.")
 
@@ -1156,10 +1199,10 @@ if "conflictividad" in MODS:
                                         config=cfg("dias_paralizacion"))
                     else:
                         st.caption("Sin medidas de fuerza con estos filtros.")
-                st.markdown("#### 🎯 ¿Por qué protestan?")
+                st.markdown("#### 🎯 Causas de la conflictividad")
                 st.plotly_chart(conflictos.motivos(Cf), width="stretch", config=cfg("motivos_conflicto"))
                 with st.container():  # a todo el ancho para que los nombres de las comunidades no se tapen
-                    st.markdown("#### 🔗 Incumplimiento y conflicto")
+                    st.markdown("#### 🔗 Correlación incumplimiento – conflicto")
                     desde_c = date(hoy.year - 3, hoy.month, 1)
                     ind_c = visual.indice_comunidades(base_df[base_df["comunidad"].isin(COMS_C["comunidad"])], COMS_C)
                     varios = COMS_C["proyecto"].nunique() > 1
@@ -1168,7 +1211,7 @@ if "conflictividad" in MODS:
                         ancho_px=370 if MOVIL else 900,
                         colores=portafolio.colores(st.session_state.comunidades)), width="stretch",
                         config=cfg("incumplimiento_y_conflicto"))
-                    st.caption(f"Cada punto es una comunidad: compromisos vencidos hoy vs. eventos de conflicto desde "
+                    nota(f"Cada punto es una comunidad: compromisos vencidos hoy vs. eventos de conflicto desde "
                                f"{desde_c:%Y}. El tamaño crece con los días de paralización. "
                                + ("El color indica la unidad o el proyecto: haz clic en la leyenda para ocultar o "
                                   "mostrar uno." if varios else "El color indica el semáforo de la comunidad."))
@@ -1274,7 +1317,7 @@ if "riesgos" in MODS:
         R_r, H_r, C_r = V["relaciones"], V["posturas"], V["conflictos"]
         P_r, PA_r = V["procesos"], V["partes"]
         ES_r, AC_r = V["escenarios"], V["acciones"]
-        st.markdown("Del diagnóstico a la decisión. Para cada **proceso clave** (una servidumbre, un contrato con una "
+        nota("Del diagnóstico a la decisión. Para cada **proceso clave** (una servidumbre, un contrato con una "
                     "empresa comunal, un monitoreo) la herramienta cruza lo que ya sabe del territorio: **quién está en "
                     "contra y cuánto pesa**, **qué conflictos hubo antes** en esa comunidad, **qué compromisos están "
                     "vencidos**, **quién se está alejando** y **qué detonantes hay en el contexto** (denuncias, cambio "
@@ -1300,11 +1343,11 @@ if "riesgos" in MODS:
 
             c1, c2 = st.columns([1.1, 1])
             with c1:
-                st.markdown("##### Cartera de procesos: riesgo vs. impacto")
+                st.markdown("##### Matriz de riesgo: probabilidad × impacto")
                 st.plotly_chart(riesgos.figura_cartera(cart, alto=330), width="stretch",
                                 config=cfg("cartera_procesos"))
             with c2:
-                st.markdown("##### Prioridad (riesgo × impacto), de mayor a menor")
+                st.markdown("##### Ranking de procesos críticos")
                 filas_p = []
                 for _, c_ in cart.iterrows():
                     col_ = riesgos.NIVEL_COLOR[c_["nivel"]]
@@ -1349,22 +1392,22 @@ if "riesgos" in MODS:
                             unsafe_allow_html=True)
                 st.plotly_chart(riesgos.figura_medidor(r0["puntos"]), width="stretch", config=cfg("riesgo_proceso"))
             with m2:
-                st.markdown("##### De dónde viene el riesgo")
+                st.markdown("##### Factores de riesgo")
                 st.plotly_chart(riesgos.figura_componentes(r0), width="stretch", config=cfg("componentes_riesgo"))
             with m3:
-                st.markdown("##### Por qué")
+                st.markdown("##### Sustento")
                 for n, (pts, txt) in r0["componentes"].items():
                     ic = "🔴" if pts >= 0.6 * riesgos.MAXIMOS[n] else "🟡" if pts >= 0.3 * riesgos.MAXIMOS[n] else "🟢"
                     st.markdown(f"{ic} **{n}:** {txt}.")
-            st.caption("El puntaje (0–100) es una guía para conversar en el equipo, no una predicción: suma la oposición "
+            nota("El puntaje (0–100) es una guía para conversar en el equipo, no una predicción: suma la oposición "
                        "de quienes deciden o pueden vetar (35), los precedentes de medidas de fuerza en la comunidad (15), "
                        "los compromisos vencidos (15), las posturas que empeoraron en 6 meses (15) y los detonantes y el "
                        "contexto (20): denuncias ambientales, comerciales o policiales, cambio de directiva, normas en "
                        "debate y riesgos de seguridad. Para la oposición pesa lo que cada actor dice **en público**.")
 
             # --- si haces esto, pasa esto
-            st.markdown("#### 🧭 Si haces esto, pasa esto")
-            st.caption("La herramienta prueba, actor por actor, qué pasaría con el riesgo si se atiende lo que le "
+            st.markdown("#### 🧭 Acciones de mitigación de mayor impacto")
+            nota("La herramienta prueba, actor por actor, qué pasaría con el riesgo si se atiende lo que le "
                        "preocupa (o si se logra que diga en público lo que dice en privado) y ordena las acciones por "
                        "su efecto. Es una guía para decidir por dónde empezar, no una garantía.")
             kw_ev = dict(partes=PA_r, A=A_hoy, H=H_r, conf=C_r, reg=base_df, hoy=hoy, contexto=CTX_r)
@@ -1404,24 +1447,24 @@ if "riesgos" in MODS:
                             pd.concat([st.session_state.acciones, nuevas], ignore_index=True))
                         st.rerun()
             with j2:
-                st.markdown("##### 📈 ¿Está funcionando el plan?")
+                st.markdown("##### 📈 Tendencia del riesgo (efectividad del plan)")
                 tend = anticipar.tendencia(riesgos.evaluar, pr, PA_r, V["actores"], H_r, C_r, V["registro"], hoy, CTX_r)
                 if len(tend) > 1:
                     st.plotly_chart(anticipar.figura_tendencia(tend), width="stretch", config=cfg("tendencia_riesgo"))
                     d_ = int(tend["puntos"].iloc[-1] - tend["puntos"].iloc[0])
-                    st.caption(f"Riesgo del proceso a fin de cada mes, con lo que se sabía en esa fecha. En 6 meses "
+                    nota(f"Riesgo del proceso a fin de cada mes, con lo que se sabía en esa fecha. En 6 meses "
                                f"{'subió' if d_ > 0 else 'bajó' if d_ < 0 else 'no cambió'}"
                                f"{f' {abs(d_)} puntos' if d_ else ''}. Sirve para mostrar a la gerencia si las acciones "
                                f"están cambiando la situación.")
 
             # --- quien puede frenar el proceso
-            st.markdown("#### 🚧 Quién puede frenar el proceso y cómo acercarse")
+            st.markdown("#### 🚧 Actores con capacidad de veto y estrategia de relacionamiento")
             p0 = r0["partes"]
             if p0.empty:
                 st.info("Este proceso aún no tiene actores asignados. Agrégalos en **Editar procesos y actores**.")
             else:
                 st.plotly_chart(riesgos.figura_actores(p0, alto=480), width="stretch", config=cfg("actores_proceso"))
-                st.markdown("##### A quién atender primero")
+                st.markdown("##### Actores prioritarios")
                 for v2, (_, a) in zip(st.columns(3), p0[p0["presion"] > 0].head(3).iterrows()):
                     with v2:
                         pts_ = riesgos.puentes(a["nombre"], A_hoy, R_r)
@@ -1448,7 +1491,7 @@ if "riesgos" in MODS:
                                  width="stretch")
 
                 # --- simulador
-                st.markdown("#### 🔀 ¿Qué pasa si…? Prueba escenarios antes de decidir")
+                st.markdown("#### 🔀 Análisis de escenarios")
                 es_p = ES_r[ES_r["proceso_id"] == pid]
                 nombres_es = list(dict.fromkeys(es_p["escenario"]))
                 res_es = [(n, riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy,
@@ -1465,7 +1508,7 @@ if "riesgos" in MODS:
                         st.info("Este proceso aún no tiene escenarios. Arma uno abajo y guárdalo.")
                 with st.container():  # armar escenario, a todo el ancho
                     st.markdown("##### Arma tu escenario")
-                    st.caption("Despliega la lista y elige uno o más escenarios guardados; luego ajusta, si quieres, la "
+                    nota("Despliega la lista y elige uno o más escenarios guardados; luego ajusta, si quieres, la "
                                "postura esperada de cada actor en la última columna.")
                     elegidos = st.multiselect("Elige uno o más escenarios guardados", nombres_es, key=f"rg_esc_{pid}",
                                               default=nombres_es[:1], placeholder="Despliega la lista para elegir")
@@ -1621,7 +1664,7 @@ if "riesgos" in MODS:
                         q2.download_button("⬇️ Imágenes PNG (.zip)", lr[1][1], width="stretch", key="dl_rg_zip",
                                            file_name=f"confluentia_riesgo_{pid}_{hoy:%Y%m%d}.zip", mime="application/zip")
 
-        with st.expander("🌩️ Detonantes y contexto: denuncias, cambio de directiva, normas, seguridad"):
+        with st.expander("🌩️ Factores externos de riesgo: denuncias, cambio de directiva, normas, seguridad"):
             st.caption("Hechos que no son una protesta pero frenan el diálogo: una denuncia ambiental, comercial o "
                        "policial contra un comunero, la elección de una nueva directiva, una norma en debate o un riesgo "
                        "de seguridad para el personal. Una denuncia pesa 3 meses; un cambio de directiva, desde 5 meses "

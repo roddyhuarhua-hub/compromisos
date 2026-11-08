@@ -223,7 +223,7 @@ def figura_alerta(res: pd.DataFrame, alto: int = 300) -> go.Figure:
         textposition="outside", cliponaxis=False, hovertemplate="%{y}: %{x}/100<extra></extra>"))
     for x in (35, 55):
         fig.add_vline(x=x, line=dict(color=visual.GRID, dash="dot"))
-    fig = visual.base(fig, alto, "Alerta por proyecto (0–100)")
+    fig = visual.base(fig, alto, "Índice de riesgo social por proyecto (0–100)")
     fig.update_xaxes(range=[0, 190], visible=False)
     fig.update_yaxes(tickfont=dict(size=13, color=visual.TINTA))
     fig.update_layout(bargap=0.4)

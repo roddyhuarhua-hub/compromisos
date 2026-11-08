@@ -163,6 +163,17 @@ def figura_vencidos(pr: pd.DataFrame, hoy: date, alto: int = 340) -> go.Figure:
 
 
 GLOSARIO = {
+    "Vista corporativa": "Todos los proyectos o unidades en una sola pantalla (portafolio de proyectos).",
+    "Grupos de interés": "Personas y organizaciones que pueden afectar o ser afectadas por el proyecto "
+                         "(stakeholders): dirigentes, autoridades, Estado, ONG, medios.",
+    "Índice de riesgo social": "Puntaje de 0 a 100 de un proyecto o comunidad: suma vencidos, conflictividad y "
+                               "procesos en riesgo.",
+    "Matriz de riesgo (probabilidad × impacto)": "Ubica cada proceso clave según qué tan probable es que se frene "
+                                                  "y cuánto le costaría al proyecto (enfoque ISO 31000).",
+    "Acción de mitigación": "Acción sobre un actor que la app prueba antes de hacerla: cuánto bajaría el riesgo.",
+    "Factores externos de riesgo": "Hechos no sociales que pueden frenar el diálogo: una denuncia ambiental, "
+                                   "comercial o policial, un cambio de directiva, una norma en debate o un riesgo "
+                                   "de seguridad.",
     "Compromiso": "Lo que una parte (empresa, Estado o comunidad) se obligó a hacer en una reunión o acta, "
                   "con un plazo.",
     "Vencido": "Compromiso cuyo plazo ya pasó y no se cumplió. Es el que la comunidad recordará cuando la "
@@ -185,9 +196,6 @@ GLOSARIO = {
     "Proceso clave": "Un hito que la empresa necesita sacar adelante: una servidumbre, un convenio, un monitoreo.",
     "Riesgo de paralización": "Puntaje de 0 a 100 de qué tan probable es que un proceso clave se frene. Bajo hasta "
                               "35, medio hasta 60, alto desde 60. Es una guía para conversar, no una predicción.",
-    "Detonante": "Hecho no social que puede frenar el diálogo: una denuncia ambiental, comercial o policial, "
-                 "un cambio de directiva, una norma en debate o un riesgo de seguridad.",
     "Validado": "Hecho confirmado por el equipo. Lo que llega por rumor o por una sola fuente no sube el riesgo "
                 "hasta validarlo.",
-    "Jugada": "Acción sobre un actor que la app prueba antes de hacerla: cuánto bajaría el riesgo si se logra.",
 }
