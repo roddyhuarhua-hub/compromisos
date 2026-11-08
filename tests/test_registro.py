@@ -359,3 +359,12 @@ def test_vencidos_por_prioridad_y_validacion():
     assert anticipar.por_validar(ctx) == 1 and anticipar.vigentes(ctx, "X", "", hoy).empty
     ctx.loc[0, "validado"] = True
     assert len(anticipar.vigentes(ctx, "X", "", hoy)) == 1
+
+
+def test_modulos_por_cliente():
+    from compromisos import modulos
+    assert modulos.leer("temprana") == ["reunion", "actores"]
+    assert modulos.leer("riesgos, actores") == ["reunion", "actores", "riesgos"]  # la captura va siempre
+    assert modulos.leer("") is None and modulos.leer("inventado") == ["reunion"]
+    assert modulos.leer("corporativo") == list(modulos.MODULOS)
+    assert modulos.paquete_de(["actores"]) == "temprana"

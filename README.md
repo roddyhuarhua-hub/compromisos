@@ -132,7 +132,16 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 - Un relacionista activo (20 reuniones al mes) ≈ **US$ 1 al mes en tokens**.
 - Servidor: Streamlit Community Cloud gratis para la demo; en producción ≈ US$ 25 al mes (base de datos + hosting) para toda una unidad operativa.
 
-**Por módulos, según la etapa del proyecto** (aprendizaje de la entrevista 2): un proyecto en etapa temprana, sin acuerdos, necesita solo el **mapa de actores y el seguimiento de líderes**; uno en exploración avanzada u operación suma compromisos, conflictividad y riesgos. Se ofrece un **piloto de 2 a 3 meses** con un indicador acordado (por ejemplo, la evolución del riesgo o de la postura del grupo de líderes). Y, como pidió la entrevista 1, la herramienta va con el **acompañamiento de Confluentia**: el criterio del consultor es parte del producto.
+**Por módulos, según la etapa del proyecto.** Las tres entrevistas coinciden: un cliente no necesita todo. La app ya se arma por módulos (`compromisos/modulos.py`): cada cliente ve solo las pestañas que contrató (variable `MODULOS` en los Secrets; en la demo se elige en la barra lateral, **🧩 Módulos del cliente**).
+
+| Paquete | Para quién | Módulos |
+|---|---|---|
+| 🌱 Etapa temprana | Proyecto sin acuerdos todavía | Nueva reunión + Mapa de actores (seguimiento de líderes) |
+| ⛏️ Exploración | Acuerdos de acceso y uso superficial | + Compromisos (panel y registro) + Riesgos y decisiones |
+| 🏭 Operación | Unidad con convenios y conflictividad histórica | + Conflictividad |
+| 🏢 Corporativo | Varios proyectos o unidades | Todo, con la vista de Portafolio |
+
+También se puede armar un paquete a medida. Se ofrece un **piloto de 2 a 3 meses** con un indicador acordado (por ejemplo, la evolución del riesgo o de la postura del grupo de líderes). Y, como pidió la entrevista 1, la herramienta va con el **acompañamiento de Confluentia**: el criterio del consultor es parte del producto.
 
 Margen bruto superior al 95 %. El costo real del negocio es la venta y la implementación en campo.
 
@@ -168,7 +177,7 @@ Yo definí el problema y el flujo desde mi experiencia en campo, hice las entrev
 
 ## Hoja de ruta
 
-Base de datos compartida (después de la entrega), **niveles de acceso** (el personal de campo solo sube información, la jefatura ve todo y la información de aliados queda reservada), módulos por etapa del proyecto, indicador mensual de avance del grupo de líderes para la casa matriz, noticias del día sobre el proyecto (locales y regionales), un manual de llenado con criterios comunes, vista gráfica del portafolio por proyecto, recordatorios por WhatsApp al responsable, transcripción en quechua, carga de evidencias de cumplimiento (fotos, actas de entrega) y mapa por comunidad.
+Base de datos compartida (después de la entrega), **niveles de acceso** (el personal de campo solo sube información, la jefatura ve todo y la información de aliados queda reservada), indicador mensual de avance del grupo de líderes para la casa matriz, noticias del día sobre el proyecto (locales y regionales), un manual de llenado con criterios comunes, vista gráfica del portafolio por proyecto, recordatorios por WhatsApp al responsable, transcripción en quechua, carga de evidencias de cumplimiento (fotos, actas de entrega) y mapa por comunidad.
 
 ## Licencia
 

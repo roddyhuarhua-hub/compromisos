@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import (actores, anticipar, conflictos, gerencia, ia, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
+from compromisos import (actores, anticipar, conflictos, gerencia, ia, modulos, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
                          portafolio, presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
@@ -270,6 +270,25 @@ with st.sidebar:
         st.session_state.pop("pptx", None)
         st.session_state["_proy_previo"] = PROY
     hoy = st.date_input("Fecha de corte", value=date.today(), format="DD/MM/YYYY")
+    # modulos contratados: fijos por cliente (MODULOS en Secrets o ?modulos=) o elegibles en la demo
+    MODS_FIJOS = modulos.leer(st.query_params.get("modulos")) or modulos.leer(os.getenv("MODULOS"))
+    if MODS_FIJOS:
+        MODS = MODS_FIJOS
+    elif not CAMPO:
+        nombres_paq = {k: v[0] for k, v in modulos.PAQUETES.items()}
+        paq = st.selectbox("🧩 Módulos del cliente", list(nombres_paq) + ["a_medida"], index=3, key="paquete",
+                           format_func=lambda k: nombres_paq.get(k, "✂️ A medida"),
+                           help="La herramienta se vende por módulos, según la etapa del proyecto. Elige un paquete "
+                                "para ver la app como la vería ese cliente.")
+        if paq == "a_medida":
+            MODS = modulos.ordenar(st.multiselect(
+                "Módulos", list(modulos.MODULOS), default=["reunion", "actores"], key="mods_medida",
+                format_func=lambda k: modulos.MODULOS[k][0]))
+        else:
+            MODS = modulos.PAQUETES[paq][1]
+            st.caption(modulos.PAQUETES[paq][2])
+    else:
+        MODS = list(modulos.MODULOS)
     if not CAMPO:
         st.link_button("📱 Modo campo (celular)", "?campo=1", width="stretch",
                        help="Solo el formulario para subir reuniones, asambleas y actas, pensado para el celular.")
@@ -334,12 +353,15 @@ def laminas_conf_cache(conf, df, corte, cliente, filtros, fondo="satelite", coms
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
+cliente = "Minera Andina S.A.C. (ejemplo)"
 if not CAMPO:  # en el celular no hace falta armar presentaciones
     with st.sidebar:
         st.divider()
         st.markdown("**📥 Llévalo a tu presentación**")
-        cliente = st.text_input("Cliente (para la portada)", "Minera Andina S.A.C. (ejemplo)")
-        cliente_lam = cliente + (f" · {PROY}" if PROY != portafolio.TODOS else "")  # pie de las laminas
+        cliente = st.text_input("Cliente (para la portada)", cliente)
+cliente_lam = cliente + (f" · {PROY}" if PROY != portafolio.TODOS else "")  # pie de las laminas
+if not CAMPO and "compromisos" in MODS:
+    with st.sidebar:
         if st.button("Preparar presentación (.pptx)", width="stretch"):
             with st.spinner("Armando las diapositivas…"):
                 st.session_state.pptx = pptx_cache(base_df, V["actores"], V["relaciones"], V["posturas"], hoy,
@@ -588,41 +610,46 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-tab_portafolio, tab_tablero, tab_actores, tab_conflictos, tab_riesgos, tab_reunion, tab_registro = st.tabs(
-    ["🗂️ Portafolio", "📊 Panel ejecutivo", "🕸️ Mapa de actores", "🔥 Conflictividad", "🎯 Riesgos y decisiones", "🎙️ Nueva reunión",
-     "📋 Registro y descargas"]
-)
+# solo las pestanas de los modulos que el cliente contrato (compromisos/modulos.py)
+ETIQUETAS = {"portafolio": "🗂️ Portafolio", "compromisos": "📊 Panel ejecutivo", "actores": "🕸️ Mapa de actores",
+             "conflictividad": "🔥 Conflictividad", "riesgos": "🎯 Riesgos y decisiones",
+             "reunion": "🎙️ Nueva reunión", "registro": "📋 Registro y descargas"}
+ACTIVAS = [k for k in ETIQUETAS if ("compromisos" if k == "registro" else k) in MODS]
+TABS = dict(zip(ACTIVAS, st.tabs([ETIQUETAS[k] for k in ACTIVAS])))
+tab_portafolio, tab_tablero, tab_actores, tab_conflictos, tab_riesgos, tab_reunion, tab_registro = (
+    TABS.get(k) for k in ("portafolio", "compromisos", "actores", "conflictividad", "riesgos", "reunion", "registro"))
 
 # ---------------------------------------------------------------- 0. portafolio
-with tab_portafolio:
-    st.markdown("La **mirada corporativa**: todos los proyectos de la empresa o de la consultora en una sola "
-                "pantalla, aunque sus comunidades y actores no tengan relación entre sí (una unidad minera, frentes "
-                "de exploración en otras regiones o clientes distintos). Para trabajar un proyecto en detalle, "
-                "elígelo en **🗂️ Proyecto**, en la barra lateral: todas las pestañas se filtran.")
-    res = portafolio.resumen(DATOS, hoy)
-    trans = portafolio.transversales(actores.al_corte(DATOS["actores"], DATOS["posturas"], hoy),
-                                     DATOS["relaciones"], DATOS["comunidades"])
-    if res.empty:
-        st.info("Aún no hay proyectos. Agrega la columna «proyecto» a tus comunidades.")
-    else:
-        st.markdown('<div class="kpis">' + "".join([
-            kpi("Proyectos", f"{len(res)}", " · ".join(f"{(res['tipo'] == t).sum()} {t.lower()}"
-                                                       for t in res["tipo"].unique() if t), "#2d4a33"),
-            kpi("📍 Comunidades", f"{int(res['comunidades'].sum())}",
-                f"{int(res['criticas'].sum())} en estado crítico", "#a32424"),
-            kpi("🔴 Compromisos vencidos", f"{int(res['vencidos'].sum())}",
-                f"de {int(res['compromisos'].sum())} registrados", COLOR_ESTADO["Vencido"]),
-            kpi("🎯 Procesos en riesgo alto", f"{int(res['riesgo_alto'].sum())}",
-                f"de {int(res['procesos'].sum())} en seguimiento", "#eda100"),
-            kpi("🔗 Actores transversales", f"{len(trans)}", "presentes en varios proyectos", "#6250d6"),
-        ]) + "</div>", unsafe_allow_html=True)
+if "portafolio" in MODS:
+    with tab_portafolio:
+        st.markdown("La **mirada corporativa**: todos los proyectos de la empresa o de la consultora en una sola "
+                    "pantalla, aunque sus comunidades y actores no tengan relación entre sí (una unidad minera, frentes "
+                    "de exploración en otras regiones o clientes distintos). Para trabajar un proyecto en detalle, "
+                    "elígelo en **🗂️ Proyecto**, en la barra lateral: todas las pestañas se filtran.")
+        res = portafolio.resumen(DATOS, hoy)
+        trans = portafolio.transversales(actores.al_corte(DATOS["actores"], DATOS["posturas"], hoy),
+                                         DATOS["relaciones"], DATOS["comunidades"])
+        if res.empty:
+            st.info("Aún no hay proyectos. Agrega la columna «proyecto» a tus comunidades.")
+        else:
+            st.markdown('<div class="kpis">' + "".join([
+                kpi("Proyectos", f"{len(res)}", " · ".join(f"{(res['tipo'] == t).sum()} {t.lower()}"
+                                                           for t in res["tipo"].unique() if t), "#2d4a33"),
+                kpi("📍 Comunidades", f"{int(res['comunidades'].sum())}",
+                    f"{int(res['criticas'].sum())} en estado crítico", "#a32424"),
+                kpi("🔴 Compromisos vencidos", f"{int(res['vencidos'].sum())}",
+                    f"de {int(res['compromisos'].sum())} registrados", COLOR_ESTADO["Vencido"]),
+                kpi("🎯 Procesos en riesgo alto", f"{int(res['riesgo_alto'].sum())}",
+                    f"de {int(res['procesos'].sum())} en seguimiento", "#eda100"),
+                kpi("🔗 Actores transversales", f"{len(trans)}", "presentes en varios proyectos", "#6250d6"),
+            ]) + "</div>", unsafe_allow_html=True)
 
-        st.markdown("#### Cómo está cada proyecto")
-        NIVEL_ICONO = {"Alto": "🔴", "Medio": "🟡", "Bajo": "🟢"}
-        for fila in range(0, len(res), 3):
-            for col_p, (_, p_) in zip(st.columns(3), res.iloc[fila:fila + 3].iterrows()):
-                elegido = PROY == p_["proyecto"]
-                col_p.markdown(f"""
+            st.markdown("#### Cómo está cada proyecto")
+            NIVEL_ICONO = {"Alto": "🔴", "Medio": "🟡", "Bajo": "🟢"}
+            for fila in range(0, len(res), 3):
+                for col_p, (_, p_) in zip(st.columns(3), res.iloc[fila:fila + 3].iterrows()):
+                    elegido = PROY == p_["proyecto"]
+                    col_p.markdown(f"""
 <div class="evento" style="border-top:6px solid {p_['color']};{'box-shadow:0 0 0 2px ' + p_['color'] + ';' if elegido else ''}">
 <div style="font-size:16px;font-weight:700">{p_['proyecto']}</div>
 <div style="color:#5b6675;font-size:12.5px;margin-bottom:8px">{p_['tipo']} · {p_['fase']} · responsable: {p_['responsable'] or '—'}</div>
@@ -638,26 +665,26 @@ with tab_portafolio:
 </table>
 <div style="font-size:12.5px;margin-top:8px"><span style="color:#5b6675">Próximo hito:</span> {p_['proximo_hito']}</div>
 </div>""", unsafe_allow_html=True)
-        st.caption("Alerta del proyecto (0–100) = 40% el índice de riesgo de su comunidad más crítica + 30% el riesgo "
-                   "de su proceso más expuesto + 30% los días de paralización de los últimos 3 años.")
+            st.caption("Alerta del proyecto (0–100) = 40% el índice de riesgo de su comunidad más crítica + 30% el riesgo "
+                       "de su proceso más expuesto + 30% los días de paralización de los últimos 3 años.")
 
-        st.markdown("#### 🗺️ Todos los ámbitos en un mapa")
-        reg_all = registro.con_estado(DATOS["registro"], hoy)
-        ind_all = visual.indice_comunidades(reg_all, DATOS["comunidades"]) if not reg_all.empty else pd.DataFrame()
-        st.plotly_chart(portafolio.figura_mapa(res, DATOS["comunidades"], ind_all), width="stretch",
-                        config=cfg("mapa_portafolio", zoom=True))
-        st.plotly_chart(portafolio.figura_alerta(res), width="stretch", config=cfg("alerta_por_proyecto"))
-        st.plotly_chart(portafolio.figura_comparacion(res), width="stretch", config=cfg("compromisos_por_proyecto"))
+            st.markdown("#### 🗺️ Todos los ámbitos en un mapa")
+            reg_all = registro.con_estado(DATOS["registro"], hoy)
+            ind_all = visual.indice_comunidades(reg_all, DATOS["comunidades"]) if not reg_all.empty else pd.DataFrame()
+            st.plotly_chart(portafolio.figura_mapa(res, DATOS["comunidades"], ind_all), width="stretch",
+                            config=cfg("mapa_portafolio", zoom=True))
+            st.plotly_chart(portafolio.figura_alerta(res), width="stretch", config=cfg("alerta_por_proyecto"))
+            st.plotly_chart(portafolio.figura_comparacion(res), width="stretch", config=cfg("compromisos_por_proyecto"))
 
-        st.markdown("#### 🔗 Actores transversales")
-        if trans.empty:
-            st.info("Ningún actor aparece en más de un proyecto.")
-        else:
-            st.markdown("Están presentes en **más de un proyecto**. Son los que pueden llevar un conflicto, una "
-                        "denuncia o una buena práctica de un ámbito a otro: conviene que un solo responsable "
-                        "coordine la relación con ellos.")
-            for col_t, (_, t_) in zip(st.columns(min(3, len(trans))), trans.head(3).iterrows()):
-                col_t.markdown(f"""
+            st.markdown("#### 🔗 Actores transversales")
+            if trans.empty:
+                st.info("Ningún actor aparece en más de un proyecto.")
+            else:
+                st.markdown("Están presentes en **más de un proyecto**. Son los que pueden llevar un conflicto, una "
+                            "denuncia o una buena práctica de un ámbito a otro: conviene que un solo responsable "
+                            "coordine la relación con ellos.")
+                for col_t, (_, t_) in zip(st.columns(min(3, len(trans))), trans.head(3).iterrows()):
+                    col_t.markdown(f"""
 <div class="evento" style="border-left:5px solid {actores.POSTURA_COLOR[int(t_['postura'])]}">
 <b>{t_['nombre']}</b> · {t_['tipo']}<br>
 <span style="color:#5b6675">{actores.POSTURA_TXT[int(t_['postura'])]} · influencia {t_['influencia']}/5</span><br>
@@ -665,568 +692,572 @@ with tab_portafolio:
 </div>""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------- 1. nueva reunion
-with tab_reunion:
-    st.info("📱 **En el celular**, usa el **modo campo**: solo el formulario para subir la reunión, con botones grandes. "
-            "Ábrelo con el botón *Modo campo* de la barra lateral o agrega `?campo=1` al final de la dirección.")
-    pantalla_reunion()
+if "reunion" in MODS:
+    with tab_reunion:
+        st.info("📱 **En el celular**, usa el **modo campo**: solo el formulario para subir la reunión, con botones grandes. "
+                "Ábrelo con el botón *Modo campo* de la barra lateral o agrega `?campo=1` al final de la dirección.")
+        pantalla_reunion()
 
 # ---------------------------------------------------------------- 2. panel ejecutivo
-with tab_tablero:
-    selector_proyecto("proy_panel")
-    df = base_df
-    f1, f2, f3 = st.columns(3)
-    comunidades_f = f1.multiselect("Comunidad", sorted(df["comunidad"].unique()), placeholder="Todas")
-    partes = f2.multiselect("Responsable", ["Empresa", "Estado", "Comunidad", "Otro"], placeholder="Todas")
-    temas = f3.multiselect("Tema", sorted(df["tema"].unique()), placeholder="Todos")
-    if comunidades_f:
-        df = df[df["comunidad"].isin(comunidades_f)]
-    if partes:
-        df = df[df["responsable"].isin(partes)]
-    if temas:
-        df = df[df["tema"].isin(temas)]
+if "compromisos" in MODS:
+    with tab_tablero:
+        selector_proyecto("proy_panel")
+        df = base_df
+        f1, f2, f3 = st.columns(3)
+        comunidades_f = f1.multiselect("Comunidad", sorted(df["comunidad"].unique()), placeholder="Todas")
+        partes = f2.multiselect("Responsable", ["Empresa", "Estado", "Comunidad", "Otro"], placeholder="Todas")
+        temas = f3.multiselect("Tema", sorted(df["tema"].unique()), placeholder="Todos")
+        if comunidades_f:
+            df = df[df["comunidad"].isin(comunidades_f)]
+        if partes:
+            df = df[df["responsable"].isin(partes)]
+        if temas:
+            df = df[df["tema"].isin(temas)]
 
-    k = registro.indicadores(df)
-    tasa = k["tasa_cumplimiento"]
-    filtros_txt = " · ".join(
-        [", ".join(c.replace("C.C. ", "") for c in comunidades_f)] * bool(comunidades_f)
-        + [f"Responsable: {', '.join(partes)}"] * bool(partes) + [f"Tema: {', '.join(temas)}"] * bool(temas))
-    with st.popover("📥 Llevar este panel a una presentación", width="stretch"):
-        st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: "
-                    "resumen, mapa territorial, semáforo, estado, quién incumple, temas y brecha. "
-                    "Respetan los filtros que tengas activos.")
-        fondo_l = FONDO_LAMINA[st.radio("Fondo del mapa", list(FONDO_LAMINA), horizontal=True, key="fondo_lam")]
-        clave_lam = (PROY, filtros_txt, hoy, cliente, len(df), int(df["cumplido"].sum()), fondo_l)
-        if st.button("Preparar láminas", type="primary", disabled=df.empty):
-            with st.spinner("Dibujando las láminas en alta resolución (descargando el mapa satelital)…"):
-                st.session_state.laminas = (clave_lam, laminas_cache(df, hoy, cliente_lam, filtros_txt, fondo_l,
-                                                                               COMUNIDADES))
-        lam = st.session_state.get("laminas")
-        if lam and lam[0] == clave_lam:  # solo si corresponden a los filtros actuales
-            p1, p2 = st.columns(2)
-            p1.download_button("⬇️ PowerPoint (.pptx)", lam[1][0], width="stretch",
-                               file_name=f"confluentia_panel_{hoy:%Y%m%d}.pptx",
-                               mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-            p2.download_button("⬇️ Imágenes PNG (.zip)", lam[1][1], width="stretch",
-                               file_name=f"confluentia_panel_{hoy:%Y%m%d}.zip", mime="application/zip")
-    ind = visual.indice_comunidades(df, COMUNIDADES) if not df.empty else pd.DataFrame()
-    criticas = int((ind["semaforo"] == "Crítico").sum()) if not ind.empty else 0
-    st.markdown('<div class="kpis">' + "".join([
-        kpi("Compromisos registrados", f"{k['total']}", f"{df['reunion'].nunique()} reuniones", "#1c5cab"),
-        kpi("🔴 Vencidos sin cumplir", f"{k['vencidos']}", "requieren acción inmediata", COLOR_ESTADO["Vencido"]),
-        kpi(f"🟡 Vencen en {registro.DIAS_ALERTA} días", f"{k['por_vencer']}", "programar seguimiento", COLOR_ESTADO["Por vencer"]),
-        kpi("✅ Tasa de cumplimiento", f"{tasa:.0%}" if tasa is not None else "–", "de los ya exigibles", COLOR_ESTADO["Cumplido"]),
-        kpi("⚠️ Comunidades en estado crítico", f"{criticas}", f"{k['alto_riesgo_abiertos']} compromisos de riesgo alto abiertos", "#a32424"),
-    ]) + "</div>", unsafe_allow_html=True)
+        k = registro.indicadores(df)
+        tasa = k["tasa_cumplimiento"]
+        filtros_txt = " · ".join(
+            [", ".join(c.replace("C.C. ", "") for c in comunidades_f)] * bool(comunidades_f)
+            + [f"Responsable: {', '.join(partes)}"] * bool(partes) + [f"Tema: {', '.join(temas)}"] * bool(temas))
+        with st.popover("📥 Llevar este panel a una presentación", width="stretch"):
+            st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: "
+                        "resumen, mapa territorial, semáforo, estado, quién incumple, temas y brecha. "
+                        "Respetan los filtros que tengas activos.")
+            fondo_l = FONDO_LAMINA[st.radio("Fondo del mapa", list(FONDO_LAMINA), horizontal=True, key="fondo_lam")]
+            clave_lam = (PROY, filtros_txt, hoy, cliente, len(df), int(df["cumplido"].sum()), fondo_l)
+            if st.button("Preparar láminas", type="primary", disabled=df.empty):
+                with st.spinner("Dibujando las láminas en alta resolución (descargando el mapa satelital)…"):
+                    st.session_state.laminas = (clave_lam, laminas_cache(df, hoy, cliente_lam, filtros_txt, fondo_l,
+                                                                                   COMUNIDADES))
+            lam = st.session_state.get("laminas")
+            if lam and lam[0] == clave_lam:  # solo si corresponden a los filtros actuales
+                p1, p2 = st.columns(2)
+                p1.download_button("⬇️ PowerPoint (.pptx)", lam[1][0], width="stretch",
+                                   file_name=f"confluentia_panel_{hoy:%Y%m%d}.pptx",
+                                   mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                p2.download_button("⬇️ Imágenes PNG (.zip)", lam[1][1], width="stretch",
+                                   file_name=f"confluentia_panel_{hoy:%Y%m%d}.zip", mime="application/zip")
+        ind = visual.indice_comunidades(df, COMUNIDADES) if not df.empty else pd.DataFrame()
+        criticas = int((ind["semaforo"] == "Crítico").sum()) if not ind.empty else 0
+        st.markdown('<div class="kpis">' + "".join([
+            kpi("Compromisos registrados", f"{k['total']}", f"{df['reunion'].nunique()} reuniones", "#1c5cab"),
+            kpi("🔴 Vencidos sin cumplir", f"{k['vencidos']}", "requieren acción inmediata", COLOR_ESTADO["Vencido"]),
+            kpi(f"🟡 Vencen en {registro.DIAS_ALERTA} días", f"{k['por_vencer']}", "programar seguimiento", COLOR_ESTADO["Por vencer"]),
+            kpi("✅ Tasa de cumplimiento", f"{tasa:.0%}" if tasa is not None else "–", "de los ya exigibles", COLOR_ESTADO["Cumplido"]),
+            kpi("⚠️ Comunidades en estado crítico", f"{criticas}", f"{k['alto_riesgo_abiertos']} compromisos de riesgo alto abiertos", "#a32424"),
+        ]) + "</div>", unsafe_allow_html=True)
 
-    if df.empty:
-        st.info("No hay compromisos con estos filtros.")
-    else:
-        # --- mapa + semaforo
-        reuniones = (df.groupby(["reunion", "fecha_reunion", "comunidad"]).size()
-                     .reset_index(name="compromisos").merge(COMUNIDADES, on="comunidad", how="left"))
-        rng = np.random.default_rng(7)  # dispersion leve para que el calor no sea un punto
-        reuniones["lat"] = reuniones["lat"] + rng.normal(0, 0.012, len(reuniones))
-        reuniones["lon"] = reuniones["lon"] + rng.normal(0, 0.012, len(reuniones))
-        c1, c2 = st.columns([1.75, 1])
-        with c1:
-            st.markdown("#### 🗺️ Mapa de calor de reuniones y semáforo por comunidad")
-            fondo = st.segmented_control("Fondo del mapa", list(visual.FONDOS), default="🛰️ Satélite",
-                                         label_visibility="collapsed") or "🛰️ Satélite"
-            st.plotly_chart(visual.mapa(ind, reuniones, fondo=fondo), width="stretch",
-                            config=cfg("mapa_comunidades", zoom=True))
-            st.caption("Halo: intensidad de reuniones. Círculos: comunidades, coloreadas por índice de riesgo; "
-                       "el tamaño crece con los compromisos vencidos. Usa la rueda del mouse para acercar.")
-        with c2:
-            st.markdown("#### 🚦 Semáforo social")
-            filas = []
-            for _, r in ind.iterrows():
-                col = visual.SEMAFORO[r["semaforo"]]
-                filas.append(
-                    f'<div class="sem"><div><div class="n">{r["comunidad"].replace("C.C. ", "")}</div>'
-                    f'<div class="d">{int(r["vencidos"])} vencidos · {int(r["reuniones"])} reuniones · '
-                    f'cumple {r["cumplimiento"]:.0%}</div>'
-                    f'<div class="bar"><div style="width:{max(4, r["indice"])}%; --c:{col}"></div></div></div>'
-                    f'<span class="badge" style="--c:{col}">{r["semaforo"]} · {r["indice"]:.0f}</span></div>')
-            st.markdown('<div class="card">' + "".join(filas) + "</div>", unsafe_allow_html=True)
-            st.markdown("##### Cumplimiento global")
-            st.plotly_chart(visual.gauge(tasa, 200), width="stretch", config=cfg("cumplimiento"))
+        if df.empty:
+            st.info("No hay compromisos con estos filtros.")
+        else:
+            # --- mapa + semaforo
+            reuniones = (df.groupby(["reunion", "fecha_reunion", "comunidad"]).size()
+                         .reset_index(name="compromisos").merge(COMUNIDADES, on="comunidad", how="left"))
+            rng = np.random.default_rng(7)  # dispersion leve para que el calor no sea un punto
+            reuniones["lat"] = reuniones["lat"] + rng.normal(0, 0.012, len(reuniones))
+            reuniones["lon"] = reuniones["lon"] + rng.normal(0, 0.012, len(reuniones))
+            c1, c2 = st.columns([1.75, 1])
+            with c1:
+                st.markdown("#### 🗺️ Mapa de calor de reuniones y semáforo por comunidad")
+                fondo = st.segmented_control("Fondo del mapa", list(visual.FONDOS), default="🛰️ Satélite",
+                                             label_visibility="collapsed") or "🛰️ Satélite"
+                st.plotly_chart(visual.mapa(ind, reuniones, fondo=fondo), width="stretch",
+                                config=cfg("mapa_comunidades", zoom=True))
+                st.caption("Halo: intensidad de reuniones. Círculos: comunidades, coloreadas por índice de riesgo; "
+                           "el tamaño crece con los compromisos vencidos. Usa la rueda del mouse para acercar.")
+            with c2:
+                st.markdown("#### 🚦 Semáforo social")
+                filas = []
+                for _, r in ind.iterrows():
+                    col = visual.SEMAFORO[r["semaforo"]]
+                    filas.append(
+                        f'<div class="sem"><div><div class="n">{r["comunidad"].replace("C.C. ", "")}</div>'
+                        f'<div class="d">{int(r["vencidos"])} vencidos · {int(r["reuniones"])} reuniones · '
+                        f'cumple {r["cumplimiento"]:.0%}</div>'
+                        f'<div class="bar"><div style="width:{max(4, r["indice"])}%; --c:{col}"></div></div></div>'
+                        f'<span class="badge" style="--c:{col}">{r["semaforo"]} · {r["indice"]:.0f}</span></div>')
+                st.markdown('<div class="card">' + "".join(filas) + "</div>", unsafe_allow_html=True)
+                st.markdown("##### Cumplimiento global")
+                st.plotly_chart(visual.gauge(tasa, 200), width="stretch", config=cfg("cumplimiento"))
 
-        # --- alertas + estados
-        c3, c4 = st.columns([1.2, 1])
-        with c3:
-            st.markdown("#### 🔔 Vencidos: atender primero")
-            # la prioridad no es solo el atraso: pesa el poder de la comunidad para paralizar (sus dirigentes
-            # opositores con influencia y su historia de paros)
-            poder_c = gerencia.poder_comunidades(actores.al_corte(V["actores"], V["posturas"], hoy),
-                                                 V["conflictos"], hoy)
-            pr_v = gerencia.priorizar(df, hoy, poder_c)
-            n_pv = int((df["estado"] == "Por vencer").sum())
-            leyenda = " ".join(f'<span class="badge" style="--c:{gerencia.PRIORIDAD_COLOR[p_]}">P{p_} · '
-                               f'{(pr_v["prioridad"] == p_).sum()}</span>' for p_ in (1, 2, 3))
-            st.markdown(f'<div style="margin:-4px 0 8px">{leyenda}</div>', unsafe_allow_html=True)
-            html = []
-            for _, r in pr_v.head(6).iterrows():
-                col = gerencia.PRIORIDAD_COLOR[r["prioridad"]]
-                html.append(
-                    f'<div class="alerta" style="--c:{col}"><div class="t">P{r["prioridad"]} · {r["descripcion"]}</div>'
-                    f'<div class="m">{r["comunidad"]} · {r["responsable"]} ({r["responsable_detalle"] or "-"}) · '
-                    f'{r["dias_atraso"]} días de atraso · riesgo {r["riesgo_conflicto"]}</div>'
-                    f'<div class="m">🏛️ Poder de la comunidad <b>{gerencia.nivel_poder(r["poder"])}</b>: '
-                    f'{r["motivo_poder"]}</div>'
-                    f'<div class="m" style="color:{col}"><b>Atender antes del {r["atender_antes"]:%d/%m}</b> '
-                    f'({gerencia.PLAZO_DIAS[r["prioridad"]]} días)</div>'
-                    + (f'<div class="m">⏳ Espera de la otra parte: {r["depende_de"]}</div>' if r["depende_de"] else "")
-                    + '</div>')
-            st.markdown("".join(html) or "Sin vencidos 🎉", unsafe_allow_html=True)
-            if len(pr_v) > 6:
-                st.caption(f"Y {len(pr_v) - 6} vencidos más en la tabla de abajo.")
-            if n_pv:
-                st.caption(f"🟡 Además, {n_pv} compromiso{'s' * (n_pv != 1)} por vencer en los próximos {registro.DIAS_ALERTA} días: "
-                           "todavía están en plazo (ver el calendario).")
-        with c4:
-            st.markdown("#### Estado de los compromisos")
-            st.plotly_chart(visual.dona_estados(df, registro.ORDEN_ESTADO), width="stretch",
-                            config=cfg("estados"))
+            # --- alertas + estados
+            c3, c4 = st.columns([1.2, 1])
+            with c3:
+                st.markdown("#### 🔔 Vencidos: atender primero")
+                # la prioridad no es solo el atraso: pesa el poder de la comunidad para paralizar (sus dirigentes
+                # opositores con influencia y su historia de paros)
+                poder_c = gerencia.poder_comunidades(actores.al_corte(V["actores"], V["posturas"], hoy),
+                                                     V["conflictos"], hoy)
+                pr_v = gerencia.priorizar(df, hoy, poder_c)
+                n_pv = int((df["estado"] == "Por vencer").sum())
+                leyenda = " ".join(f'<span class="badge" style="--c:{gerencia.PRIORIDAD_COLOR[p_]}">P{p_} · '
+                                   f'{(pr_v["prioridad"] == p_).sum()}</span>' for p_ in (1, 2, 3))
+                st.markdown(f'<div style="margin:-4px 0 8px">{leyenda}</div>', unsafe_allow_html=True)
+                html = []
+                for _, r in pr_v.head(6).iterrows():
+                    col = gerencia.PRIORIDAD_COLOR[r["prioridad"]]
+                    html.append(
+                        f'<div class="alerta" style="--c:{col}"><div class="t">P{r["prioridad"]} · {r["descripcion"]}</div>'
+                        f'<div class="m">{r["comunidad"]} · {r["responsable"]} ({r["responsable_detalle"] or "-"}) · '
+                        f'{r["dias_atraso"]} días de atraso · riesgo {r["riesgo_conflicto"]}</div>'
+                        f'<div class="m">🏛️ Poder de la comunidad <b>{gerencia.nivel_poder(r["poder"])}</b>: '
+                        f'{r["motivo_poder"]}</div>'
+                        f'<div class="m" style="color:{col}"><b>Atender antes del {r["atender_antes"]:%d/%m}</b> '
+                        f'({gerencia.PLAZO_DIAS[r["prioridad"]]} días)</div>'
+                        + (f'<div class="m">⏳ Espera de la otra parte: {r["depende_de"]}</div>' if r["depende_de"] else "")
+                        + '</div>')
+                st.markdown("".join(html) or "Sin vencidos 🎉", unsafe_allow_html=True)
+                if len(pr_v) > 6:
+                    st.caption(f"Y {len(pr_v) - 6} vencidos más en la tabla de abajo.")
+                if n_pv:
+                    st.caption(f"🟡 Además, {n_pv} compromiso{'s' * (n_pv != 1)} por vencer en los próximos {registro.DIAS_ALERTA} días: "
+                               "todavía están en plazo (ver el calendario).")
+            with c4:
+                st.markdown("#### Estado de los compromisos")
+                st.plotly_chart(visual.dona_estados(df, registro.ORDEN_ESTADO), width="stretch",
+                                config=cfg("estados"))
 
-        # --- vencidos por prioridad: mismos colores que las alertas (entrevista 3)
-        if not pr_v.empty:
-            v1, v2 = st.columns([1.6, 1])
-            with v1:
-                st.plotly_chart(gerencia.figura_vencidos(pr_v, hoy), width="stretch", config=cfg("vencidos_prioridad"))
-            with v2:
-                st.markdown("##### Vencidos por comunidad y prioridad")
-                st.markdown(gerencia.tabla_html(pr_v), unsafe_allow_html=True)
-                st.caption("La prioridad no depende solo del atraso. Suma el tema del compromiso (agua, tierras, "
-                           "salud y empleo son riesgo alto) y el **poder de la comunidad para paralizar**: sus "
-                           "dirigentes opositores con influencia y sus paros de los últimos 5 años. Un mismo vencido "
-                           "es P1 donde hay dirigentes que ya paralizaron y P2 o P3 donde nunca hubo paro. "
-                           "Plazos: P1 7 días, P2 15, P3 30.")
+            # --- vencidos por prioridad: mismos colores que las alertas (entrevista 3)
+            if not pr_v.empty:
+                v1, v2 = st.columns([1.6, 1])
+                with v1:
+                    st.plotly_chart(gerencia.figura_vencidos(pr_v, hoy), width="stretch", config=cfg("vencidos_prioridad"))
+                with v2:
+                    st.markdown("##### Vencidos por comunidad y prioridad")
+                    st.markdown(gerencia.tabla_html(pr_v), unsafe_allow_html=True)
+                    st.caption("La prioridad no depende solo del atraso. Suma el tema del compromiso (agua, tierras, "
+                               "salud y empleo son riesgo alto) y el **poder de la comunidad para paralizar**: sus "
+                               "dirigentes opositores con influencia y sus paros de los últimos 5 años. Un mismo vencido "
+                               "es P1 donde hay dirigentes que ya paralizaron y P2 o P3 donde nunca hubo paro. "
+                               "Plazos: P1 7 días, P2 15, P3 30.")
 
-        # --- calendario
-        st.plotly_chart(visual.calendario(df, hoy), width="stretch", config=cfg("calendario_vencimientos"))
+            # --- calendario
+            st.plotly_chart(visual.calendario(df, hoy), width="stretch", config=cfg("calendario_vencimientos"))
 
-        # --- analisis
-        st.plotly_chart(visual.calor_tema(df), width="stretch", config=cfg("temas_por_comunidad"))
-        st.plotly_chart(visual.quien_incumple(df, registro.ORDEN_ESTADO), width="stretch",
-                        config=cfg("quien_incumple"))
-        st.plotly_chart(visual.brecha(df, hoy), width="stretch", config=cfg("brecha_cumplimiento"))
+            # --- analisis
+            st.plotly_chart(visual.calor_tema(df), width="stretch", config=cfg("temas_por_comunidad"))
+            st.plotly_chart(visual.quien_incumple(df, registro.ORDEN_ESTADO), width="stretch",
+                            config=cfg("quien_incumple"))
+            st.plotly_chart(visual.brecha(df, hoy), width="stretch", config=cfg("brecha_cumplimiento"))
 
 # ---------------------------------------------------------------- 2b. mapa de actores
-with tab_actores:
-    selector_proyecto("proy_actores")
-    A, R, H = V["actores"], V["relaciones"], V["posturas"]
-    st.markdown("Cada reunión que procesa la IA alimenta este mapa: **quién es quién** en cada comunidad, "
-                "su postura hacia la empresa, su influencia y **cómo se relacionan** entre caseríos y comunidades. "
-                "Como las posturas cambian, cada reunión deja una *foto* fechada: mueve la línea de tiempo para "
-                "ver el mapa como estaba en otro momento.")
-    fechas_h = sorted(set(H["fecha"]) | {hoy})
-    corte = st.select_slider("📅 Ver el mapa a la fecha", options=fechas_h, value=fechas_h[-1],
-                             format_func=lambda d: d.strftime("%d/%m/%Y"), key="act_corte")
-    A = actores.al_corte(A, H, corte)
-    g1, g2, g3 = st.columns([1.4, 1.2, 1])
-    coms_a = sorted(c for c in A["comunidad"].unique() if c)
-    sel_coms = g1.multiselect("Comunidades", coms_a, placeholder="Todas", key="act_com")
-    sel_tipos = g2.multiselect("Tipo de actor", list(actores.SIMBOLO_TIPO), placeholder="Todos", key="act_tipo")
-    externos = g3.toggle("Incluir Estado, empresa y sociedad civil", value=True)
-    A_f = A.copy()
-    if sel_coms:
-        A_f = A_f[A_f["comunidad"].isin(sel_coms) | ((A_f["comunidad"] == "") & externos)]
-    elif not externos:
-        A_f = A_f[A_f["comunidad"] != ""]
-    if sel_tipos:
-        A_f = A_f[A_f["tipo"].isin(sel_tipos)]
-    nombres = set(A_f["nombre"])
-    R_f = R[R["origen"].isin(nombres) & R["destino"].isin(nombres)]
-    G = actores.red(A_f, R_f)
-    M = actores.metricas(G)
+if "actores" in MODS:
+    with tab_actores:
+        selector_proyecto("proy_actores")
+        A, R, H = V["actores"], V["relaciones"], V["posturas"]
+        st.markdown("Cada reunión que procesa la IA alimenta este mapa: **quién es quién** en cada comunidad, "
+                    "su postura hacia la empresa, su influencia y **cómo se relacionan** entre caseríos y comunidades. "
+                    "Como las posturas cambian, cada reunión deja una *foto* fechada: mueve la línea de tiempo para "
+                    "ver el mapa como estaba en otro momento.")
+        fechas_h = sorted(set(H["fecha"]) | {hoy})
+        corte = st.select_slider("📅 Ver el mapa a la fecha", options=fechas_h, value=fechas_h[-1],
+                                 format_func=lambda d: d.strftime("%d/%m/%Y"), key="act_corte")
+        A = actores.al_corte(A, H, corte)
+        g1, g2, g3 = st.columns([1.4, 1.2, 1])
+        coms_a = sorted(c for c in A["comunidad"].unique() if c)
+        sel_coms = g1.multiselect("Comunidades", coms_a, placeholder="Todas", key="act_com")
+        sel_tipos = g2.multiselect("Tipo de actor", list(actores.SIMBOLO_TIPO), placeholder="Todos", key="act_tipo")
+        externos = g3.toggle("Incluir Estado, empresa y sociedad civil", value=True)
+        A_f = A.copy()
+        if sel_coms:
+            A_f = A_f[A_f["comunidad"].isin(sel_coms) | ((A_f["comunidad"] == "") & externos)]
+        elif not externos:
+            A_f = A_f[A_f["comunidad"] != ""]
+        if sel_tipos:
+            A_f = A_f[A_f["tipo"].isin(sel_tipos)]
+        nombres = set(A_f["nombre"])
+        R_f = R[R["origen"].isin(nombres) & R["destino"].isin(nombres)]
+        G = actores.red(A_f, R_f)
+        M = actores.metricas(G)
 
-    filtros_a = " · ".join([f"Mapa al {corte:%d/%m/%Y}"]
-                           + [", ".join(c.replace("C.C. ", "") for c in sel_coms)] * bool(sel_coms)
-                           + [", ".join(sel_tipos)] * bool(sel_tipos))
-    with st.popover("📥 Bajar el mapa de actores para una presentación", width="stretch"):
-        st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: resumen, "
-                    "red de relaciones, actores clave, matriz poder–postura, balance por comunidad, cambios de "
-                    "postura y trayectorias. Respetan la fecha del mapa y los filtros activos.")
-        clave_a = (PROY, filtros_a, cliente, len(A_f), len(R_f), int(A_f["postura"].sum()) if not A_f.empty else 0,
-                   len(H))
-        if st.button("Preparar láminas", type="primary", disabled=A_f.empty, key="btn_lam_act"):
-            with st.spinner("Dibujando las láminas en alta resolución…"):
-                st.session_state.laminas_act = (clave_a, laminas_act_cache(A_f, R_f, H, corte, cliente_lam, filtros_a))
-        la_ = st.session_state.get("laminas_act")
-        if la_ and la_[0] == clave_a:
-            q1, q2 = st.columns(2)
-            q1.download_button("⬇️ PowerPoint (.pptx)", la_[1][0], width="stretch", key="dl_act_pptx",
-                               file_name=f"confluentia_mapa_actores_{corte:%Y%m%d}.pptx",
-                               mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-            q2.download_button("⬇️ Imágenes PNG (.zip)", la_[1][1], width="stretch", key="dl_act_zip",
-                               file_name=f"confluentia_mapa_actores_{corte:%Y%m%d}.zip", mime="application/zip")
-        st.caption("Cada gráfico de esta pestaña también se baja suelto con el ícono 📷 al pasar el mouse.")
-
-    if M.empty:
-        st.info("No hay actores con estos filtros.")
-    else:
-        opositores = int((M["postura"] < 0).sum())
-        aliados = int((M["postura"] > 0).sum())
-        puentes = M[M["puente"] & (M["intermediacion"] > 0.05)]
-        n_conflictos = int((R_f["tipo"] == "Conflicto").sum())
-        hace_6m = (pd.Timestamp(corte) - pd.DateOffset(months=6)).date()
-        mov = actores.cambios(H[H["nombre"].isin(M["nombre"])], hace_6m, corte)
-        st.markdown('<div class="kpis">' + "".join([
-            kpi("Actores mapeados", f"{len(M)}", f"{len(R_f)} relaciones", "#1c5cab"),
-            kpi("🔵 Aliados o favorables", f"{aliados}", f"{aliados / len(M):.0%} del total", "#1c5cab"),
-            kpi("🟠 Críticos u opositores", f"{opositores}",
-                f"{int(((M['postura'] < 0) & (M['influencia'] >= 4)).sum())} con alta influencia", "#c2410c"),
-            kpi("🔗 Actores puente", f"{len(puentes)}", "conectan comunidades distintas", "#1f2a37"),
-            kpi("↘️ Se alejaron (6 meses)", f"{int((mov['delta'] < 0).sum())}",
-                f"{int((mov['delta'] > 0).sum())} se acercaron · {n_conflictos} relaciones en conflicto", "#d03b3b"),
-        ]) + "</div>", unsafe_allow_html=True)
-
-        c1, c2 = st.columns([1.75, 1])
-        with c1:
-            st.markdown("#### 🕸️ Red de relaciones e influencias")
-            foco = st.selectbox("Resaltar un actor y sus vínculos", ["(ninguno)"] + M["nombre"].tolist(),
-                                key="act_foco")
-            st.plotly_chart(actores.figura_red(G, M, resaltar=None if foco == "(ninguno)" else foco),
-                            width="stretch", config=cfg("red_actores", zoom=True))
-            st.caption("Color: postura hacia la empresa. Tamaño: influencia. Forma: ● comunidad, ■ Estado/autoridad, "
-                       "◆ empresa, ▲ ONG/iglesia/medios. Borde oscuro: actor puente. Cada grupo es una comunidad.")
-            if MOVIL:
-                st.info("📱 En el celular: toca un punto para ver quién es, abre el gráfico en pantalla completa "
-                        "(⛶) y usa dos dedos para acercar. Para ver los nombres, elige una comunidad arriba o "
-                        "resalta un actor.")
-        with c2:
-            st.markdown("#### ⭐ Actores clave de la red")
-            st.caption("Intermediación: qué tanto pasa por este actor la comunicación entre los demás "
-                       "(si se cae o cambia de postura, la red se reconfigura).")
-            filas = []
-            for _, r in M.head(8).iterrows():
-                col = actores.POSTURA_COLOR[int(r["postura"])]
-                ancho = max(4, int(100 * r["intermediacion"] / max(M["intermediacion"].max(), 1e-9)))
-                filas.append(
-                    f'<div class="sem"><div><div class="n">{r["nombre"]}</div>'
-                    f'<div class="d">{r["cargo"] or r["tipo"]} · {(r["comunidad"] or "externo").replace("C.C. ", "")}'
-                    f' · {r["vinculos"]} vínculos{" · 🔗 puente" if r["puente"] else ""}</div>'
-                    f'<div class="bar"><div style="width:{ancho}%;--c:{col}"></div></div></div>'
-                    f'<span class="badge" style="background:{col}">{r["postura_txt"]}</span></div>')
-            st.markdown("".join(filas), unsafe_allow_html=True)
-
-        c3, c4 = st.columns(2)
-        with c3:
-            st.markdown("#### 🎯 Matriz poder – postura")
-            st.plotly_chart(actores.matriz_poder_interes(M), width="stretch", config=cfg("matriz_poder_postura"))
-            criticos = M[(M["postura"] < 0) & (M["influencia"] >= 4)].sort_values(
-                ["influencia", "postura", "vinculos"], ascending=[False, True, False]).head(6)
-            if not criticos.empty:
-                st.warning("**Gestionar de cerca:** " + ", ".join(
-                    f"{r['nombre']} ({(r['comunidad'] or r['organizacion']).replace('C.C. ', '')})"
-                    for _, r in criticos.iterrows()))
-        with c4:
-            st.markdown("#### ⚖️ Balance de posturas por comunidad")
-            if (M["comunidad"] != "").any():
-                st.plotly_chart(actores.balance_comunidades(M), width="stretch", config=cfg("balance_posturas"))
-            st.markdown("#### 🔗 Relaciones entre comunidades")
-            com_de = A.set_index("nombre")["comunidad"]
-            inter = R_f.assign(c_o=R_f["origen"].map(com_de), c_d=R_f["destino"].map(com_de))
-            inter = inter[(inter["c_o"] != "") & (inter["c_d"] != "") & (inter["c_o"] != inter["c_d"])]
-            if inter.empty:
-                st.caption("Sin relaciones registradas entre comunidades con estos filtros.")
-            else:
-                st.dataframe(
-                    inter.assign(Entre=inter["c_o"].str.replace("C.C. ", "") + " ↔ " + inter["c_d"].str.replace("C.C. ", ""))
-                    [["Entre", "tipo", "descripcion"]].rename(columns={"tipo": "Relación", "descripcion": "Detalle"}),
-                    hide_index=True, width="stretch")
-
-    # ------------------------------------------------ dinamica: cambios de postura
-    st.markdown("### ⏳ Dinámica de posturas en el territorio")
-    d1, d2 = st.columns([1, 2.2])
-    periodo = d1.radio("Comparar contra", ["3 meses atrás", "6 meses atrás", "1 año atrás", "Primer registro"],
-                       index=1, key="act_periodo")
-    meses = {"3 meses atrás": 3, "6 meses atrás": 6, "1 año atrás": 12}.get(periodo)
-    desde = (pd.Timestamp(corte) - pd.DateOffset(months=meses)).date() if meses else min(H["fecha"])
-    Hf = H[H["nombre"].isin(A["nombre"])]
-    if sel_coms:
-        Hf = Hf[Hf["nombre"].isin(A_f["nombre"])]
-    cam = actores.cambios(Hf, desde, corte)
-    alejan, acercan = cam[cam["delta"] < 0], cam[cam["delta"] > 0]
-    d1.markdown(
-        f'<div class="kpis" style="grid-template-columns:1fr 1fr">'
-        + kpi("↘️ Se alejan", f"{len(alejan)}", f"{int((alejan['influencia'] >= 4).sum())} con alta influencia", "#c2410c")
-        + kpi("↗️ Se acercan", f"{len(acercan)}", "oportunidad de alianza", "#1c5cab") + "</div>",
-        unsafe_allow_html=True)
-    if not alejan.empty:
-        r = alejan.iloc[0]
-        d1.error(f"**Alerta temprana:** {r['nombre']} pasó de *{actores.POSTURA_TXT[r['antes']]}* a "
-                 f"*{actores.POSTURA_TXT[r['ahora']]}* ({r['fecha_cambio']:%d/%m/%Y}, {r['reunion']}). "
-                 f"“{r['evidencia']}”")
-    with d2:
-        st.markdown(f"#### Quién cambió de postura desde el {desde:%d/%m/%Y}")
-        if cam.empty:
-            st.info("Nadie cambió de postura en este periodo.")
-        else:
-            st.plotly_chart(actores.figura_cambios(cam.head(14)), width="stretch", config=cfg("cambios_postura"))
-            st.caption("○ postura antes → ● postura ahora. Naranja: se aleja de la empresa; azul: se acerca. "
-                       "Ordenado por riesgo (cuánto se movió × su influencia). Pasa el mouse para ver la evidencia.")
-    st.markdown("#### 📈 Trayectoria de cada actor, reunión tras reunión")
-    # por defecto: los actores influyentes con la historia mas movida (mas posturas distintas)
-    mov_h = (Hf[Hf["fecha"] <= corte].groupby("nombre")
-             .agg(n=("postura", "nunique"), inf=("influencia", "max"), reg=("postura", "size")))
-    mov_h = mov_h[mov_h["reg"] >= 3].assign(score=lambda d: d["n"] * d["inf"]).sort_values("score", ascending=False)
-    por_defecto = mov_h.index[:4].tolist() or cam["nombre"].head(4).tolist()
-    elegidos = st.multiselect("Actores a seguir", sorted(H["nombre"].unique()), default=por_defecto,
-                              key="act_tray", max_selections=6)
-    if elegidos:
-        st.plotly_chart(actores.figura_trayectorias(H[H["fecha"] <= corte], elegidos), width="stretch",
-                        config=cfg("trayectorias_actores"))
-    if not cam.empty:
-        st.dataframe(
-            cam.assign(antes=cam["antes"].map(actores.POSTURA_TXT), ahora=cam["ahora"].map(actores.POSTURA_TXT),
-                       comunidad=cam["comunidad"].str.replace("C.C. ", ""))
-            [["nombre", "comunidad", "antes", "ahora", "fecha_cambio", "reunion", "evidencia"]]
-            .rename(columns={"nombre": "Actor", "comunidad": "Comunidad", "antes": "Antes", "ahora": "Ahora",
-                             "fecha_cambio": "Cambió el", "reunion": "Reunión", "evidencia": "Evidencia"}),
-            hide_index=True, width="stretch",
-            column_config={"Cambió el": st.column_config.DateColumn(format="DD/MM/YYYY")})
-
-    with st.expander("📝 Editar y descargar el mapa de actores"):
-        e1, e2 = st.columns(2)
-        A_ed = e1.data_editor(V["actores"].reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch",
-                              key="ed_actores", column_config={
-                                  "postura_publica": st.column_config.TextColumn(
-                                      "Postura en público", help="Solo si en asamblea dice algo distinto de lo que "
-                                      "dice en privado: -2 opositor … 2 aliado. Vacío = igual."),
-                                  "interes_fondo": st.column_config.TextColumn(
-                                      "Interés de fondo (reservado)", width="large",
-                                      help="Lo que explica su postura y no está escrito en ningún acta: "
-                                           "antecedentes, aspiraciones, agravios. Solo para el equipo.")})
-        R_ed = e2.data_editor(R.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_relaciones")
-        b1, b2, b3 = st.columns(3)
-        if b1.button("Guardar cambios del mapa"):
-            st.session_state.actores = actores.normalizar_actores(
-                portafolio.reemplazar(st.session_state.actores, V["actores"], A_ed))
-            st.session_state.relaciones = actores.normalizar_relaciones(
-                portafolio.reemplazar(st.session_state.relaciones, V["relaciones"], R_ed))
-            st.rerun()
-        b2.download_button("⬇️ Actores (CSV)", V["actores"].to_csv(index=False).encode("utf-8"), "actores.csv", "text/csv")
-        b3.download_button("⬇️ Relaciones (CSV)", R.to_csv(index=False).encode("utf-8"), "relaciones.csv", "text/csv")
-        st.download_button("⬇️ Historial de posturas (CSV)", H.to_csv(index=False).encode("utf-8"),
-                           "historial_posturas.csv", "text/csv")
-
-# ---------------------------------------------------------------- 2c. conflictividad
-with tab_conflictos:
-    C = V["conflictos"]
-    st.markdown("La memoria del territorio: **paralizaciones, bloqueos de vías, tomas y otras manifestaciones** "
-                "contra la empresa, con el lugar exacto donde ocurrieron, quién convocó, qué exigían y cómo terminó. "
-                "Sirve para anticipar: los conflictos suelen repetirse en los mismos lugares y por las mismas demandas.")
-    if C.empty:
-        st.info("Aún no hay eventos registrados. Agrégalos abajo, en **Registrar un evento**.")
-    else:
-        anios = sorted({f.year for f in C["fecha"]})
-        proy_de = dict(zip(COMUNIDADES["comunidad"], COMUNIDADES["proyecto"]))
-        varios_p = COMUNIDADES["proyecto"].nunique() > 1
-        h1, h2, h3 = st.columns([1.3, 1.4, 1.3])
-        rango = h1.slider("Años", anios[0], max(anios[-1], anios[0] + 1), (anios[0], anios[-1]), key="conf_anios") \
-            if len(anios) > 1 else (anios[0], anios[0])
-        tipos_f = h2.multiselect("Tipo de medida", list(conflictos.TIPO_COLOR), placeholder="Todas", key="conf_tipo")
-        if varios_p:  # primero la unidad o el proyecto: es lo que todos conocen
-            proys_f = h3.multiselect("Unidad o proyecto", portafolio.lista(COMUNIDADES), placeholder="Todos",
-                                     key="conf_proy")
-        else:
-            proys_f = []
-        opciones_c = sorted(c for c in C["comunidad"].unique() if c and (not proys_f or proy_de.get(c) in proys_f))
-        coms_f = st.multiselect("Comunidad", opciones_c, placeholder="Todas", key="conf_com",
-                                format_func=lambda c: f"{c} · {proy_de.get(c, '')}" if varios_p else c) \
-            if varios_p else h3.multiselect("Comunidad", opciones_c, placeholder="Todas", key="conf_com")
-        Cf = C[C["fecha"].map(lambda f: rango[0] <= f.year <= rango[1])]
-        COMS_C = COMUNIDADES[COMUNIDADES["proyecto"].isin(proys_f)] if proys_f else COMUNIDADES
-        if proys_f:
-            Cf = Cf[Cf["comunidad"].map(proy_de).isin(proys_f)]
-        if tipos_f:
-            Cf = Cf[Cf["tipo"].isin(tipos_f)]
-        if coms_f:
-            Cf = Cf[Cf["comunidad"].isin(coms_f)]
-        kc = conflictos.indicadores(Cf, hoy)
-        st.markdown('<div class="kpis">' + "".join([
-            kpi("Eventos registrados", f"{kc['eventos']}", f"{kc['medidas_fuerza']} medidas de fuerza", "#2d4a33"),
-            kpi("⏱️ Días de paralización", f"{kc['dias_paralizacion']}", "bloqueos, paros y tomas", "#a32424"),
-            kpi("🚧 Bloqueos de vía", f"{kc['bloqueos']}", "tránsito y operación afectados", "#c2410c"),
-            kpi("⚠️ Con violencia", f"{kc['con_violencia']}", "heridos, detenidos o daños", "#111827"),
-            kpi("📅 Último evento", f"{kc['dias_desde_ultimo']} días" if kc["ultimo"] else "–",
-                f"{kc['ultimo']:%d/%m/%Y}" + (f" · {kc['en_curso']} en curso" if kc["en_curso"] else "")
-                if kc["ultimo"] else "", "#eda100"),
-        ]) + "</div>", unsafe_allow_html=True)
-
-        filtros_c = " · ".join([f"{rango[0]}–{rango[1]}"] + [", ".join(tipos_f)] * bool(tipos_f)
-                               + [", ".join(c.replace("C.C. ", "") for c in coms_f)] * bool(coms_f))
-        with st.popover("📥 Bajar estos gráficos para una presentación", width="stretch"):
-            st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: "
-                        "resumen, mapa de conflictos, cronología, eventos por año, días de paralización, motivos e "
-                        "incumplimiento vs. conflicto. Respetan los filtros activos.")
-            fondo_lc = FONDO_LAMINA[st.radio("Fondo del mapa", list(FONDO_LAMINA), horizontal=True,
-                                             key="fondo_lam_conf")]
-            clave_c = (PROY, filtros_c, hoy, cliente, len(Cf), int(Cf["duracion_dias"].sum()) if not Cf.empty else 0,
-                       fondo_lc)
-            if st.button("Preparar láminas", type="primary", disabled=Cf.empty, key="btn_lam_conf"):
-                with st.spinner("Dibujando las láminas en alta resolución (descargando el mapa satelital)…"):
-                    st.session_state.laminas_conf = (clave_c, laminas_conf_cache(Cf, base_df, hoy, cliente_lam,
-                                                                                filtros_c, fondo_lc, COMUNIDADES))
-            lc = st.session_state.get("laminas_conf")
-            if lc and lc[0] == clave_c:
+        filtros_a = " · ".join([f"Mapa al {corte:%d/%m/%Y}"]
+                               + [", ".join(c.replace("C.C. ", "") for c in sel_coms)] * bool(sel_coms)
+                               + [", ".join(sel_tipos)] * bool(sel_tipos))
+        with st.popover("📥 Bajar el mapa de actores para una presentación", width="stretch"):
+            st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: resumen, "
+                        "red de relaciones, actores clave, matriz poder–postura, balance por comunidad, cambios de "
+                        "postura y trayectorias. Respetan la fecha del mapa y los filtros activos.")
+            clave_a = (PROY, filtros_a, cliente, len(A_f), len(R_f), int(A_f["postura"].sum()) if not A_f.empty else 0,
+                       len(H))
+            if st.button("Preparar láminas", type="primary", disabled=A_f.empty, key="btn_lam_act"):
+                with st.spinner("Dibujando las láminas en alta resolución…"):
+                    st.session_state.laminas_act = (clave_a, laminas_act_cache(A_f, R_f, H, corte, cliente_lam, filtros_a))
+            la_ = st.session_state.get("laminas_act")
+            if la_ and la_[0] == clave_a:
                 q1, q2 = st.columns(2)
-                q1.download_button("⬇️ PowerPoint (.pptx)", lc[1][0], width="stretch",
-                                   file_name=f"confluentia_conflictividad_{hoy:%Y%m%d}.pptx", key="dl_conf_pptx",
+                q1.download_button("⬇️ PowerPoint (.pptx)", la_[1][0], width="stretch", key="dl_act_pptx",
+                                   file_name=f"confluentia_mapa_actores_{corte:%Y%m%d}.pptx",
                                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-                q2.download_button("⬇️ Imágenes PNG (.zip)", lc[1][1], width="stretch", key="dl_conf_zip",
-                                   file_name=f"confluentia_conflictividad_{hoy:%Y%m%d}.zip", mime="application/zip")
+                q2.download_button("⬇️ Imágenes PNG (.zip)", la_[1][1], width="stretch", key="dl_act_zip",
+                                   file_name=f"confluentia_mapa_actores_{corte:%Y%m%d}.zip", mime="application/zip")
             st.caption("Cada gráfico de esta pestaña también se baja suelto con el ícono 📷 al pasar el mouse.")
 
-        if Cf.empty:
-            st.info("No hay eventos con estos filtros.")
+        if M.empty:
+            st.info("No hay actores con estos filtros.")
         else:
-            m1, m2 = st.columns([1.75, 1])
-            with m1:
-                st.markdown("#### 📍 Dónde ocurrieron")
-                fondo_c = st.segmented_control("Fondo", list(visual.FONDOS), default="🛰️ Satélite",
-                                               label_visibility="collapsed", key="conf_fondo") or "🛰️ Satélite"
-                st.plotly_chart(conflictos.mapa(Cf, COMS_C, fondo_c), width="stretch",
-                                config=cfg("mapa_conflictos", zoom=True))
-                st.caption("Calor: lugares con más días de paralización. Cada punto es un evento, coloreado por tipo; "
-                           "el tamaño crece con la duración. Pasa el mouse para ver quién convocó y qué exigían.")
-            with m2:
-                st.markdown("#### 🕑 Eventos más recientes")
-                tarjetas = []
-                for _, r in Cf.head(6).iterrows():
-                    col = conflictos.TIPO_COLOR.get(r["tipo"], "#8a8984")
-                    extra = " · ⚠️ violencia" if r["hubo_violencia"] else ""
-                    tarjetas.append(
-                        f'<div class="alerta" style="--c:{col}"><div class="t">{r["titulo"]}</div>'
-                        f'<div class="m">{r["fecha"]:%d/%m/%Y} · {r["tipo"]} · {r["lugar"] or r["comunidad"]}</div>'
-                        f'<div class="m">{r["duracion_dias"]} días · {r["desenlace"] or "sin desenlace"}{extra}</div>'
-                        f'</div>')
-                st.markdown("".join(tarjetas), unsafe_allow_html=True)
-                lugares = Cf[Cf["lugar"] != ""].groupby("lugar").agg(n=("tipo", "count"),
-                                                                     dias=("duracion_dias", "sum"))
-                lugares = lugares[lugares["n"] >= 2].sort_values(["n", "dias"], ascending=False)
-                if not lugares.empty:
-                    st.warning("**Puntos calientes que se repiten:** " + "; ".join(
-                        f"{l} ({r.n} eventos, {r.dias} días)" for l, r in lugares.head(3).iterrows()))
+            opositores = int((M["postura"] < 0).sum())
+            aliados = int((M["postura"] > 0).sum())
+            puentes = M[M["puente"] & (M["intermediacion"] > 0.05)]
+            n_conflictos = int((R_f["tipo"] == "Conflicto").sum())
+            hace_6m = (pd.Timestamp(corte) - pd.DateOffset(months=6)).date()
+            mov = actores.cambios(H[H["nombre"].isin(M["nombre"])], hace_6m, corte)
+            st.markdown('<div class="kpis">' + "".join([
+                kpi("Actores mapeados", f"{len(M)}", f"{len(R_f)} relaciones", "#1c5cab"),
+                kpi("🔵 Aliados o favorables", f"{aliados}", f"{aliados / len(M):.0%} del total", "#1c5cab"),
+                kpi("🟠 Críticos u opositores", f"{opositores}",
+                    f"{int(((M['postura'] < 0) & (M['influencia'] >= 4)).sum())} con alta influencia", "#c2410c"),
+                kpi("🔗 Actores puente", f"{len(puentes)}", "conectan comunidades distintas", "#1f2a37"),
+                kpi("↘️ Se alejaron (6 meses)", f"{int((mov['delta'] < 0).sum())}",
+                    f"{int((mov['delta'] > 0).sum())} se acercaron · {n_conflictos} relaciones en conflicto", "#d03b3b"),
+            ]) + "</div>", unsafe_allow_html=True)
 
-            st.markdown("#### 📜 Cronología del conflicto por comunidad")
-            st.plotly_chart(conflictos.cronologia(Cf), width="stretch", config=cfg("cronologia_conflictos"))
-            st.caption("Tamaño: duración de la medida. Borde negro: hubo violencia.")
+            c1, c2 = st.columns([1.75, 1])
+            with c1:
+                st.markdown("#### 🕸️ Red de relaciones e influencias")
+                foco = st.selectbox("Resaltar un actor y sus vínculos", ["(ninguno)"] + M["nombre"].tolist(),
+                                    key="act_foco")
+                st.plotly_chart(actores.figura_red(G, M, resaltar=None if foco == "(ninguno)" else foco),
+                                width="stretch", config=cfg("red_actores", zoom=True))
+                st.caption("Color: postura hacia la empresa. Tamaño: influencia. Forma: ● comunidad, ■ Estado/autoridad, "
+                           "◆ empresa, ▲ ONG/iglesia/medios. Borde oscuro: actor puente. Cada grupo es una comunidad.")
+                if MOVIL:
+                    st.info("📱 En el celular: toca un punto para ver quién es, abre el gráfico en pantalla completa "
+                            "(⛶) y usa dos dedos para acercar. Para ver los nombres, elige una comunidad arriba o "
+                            "resalta un actor.")
+            with c2:
+                st.markdown("#### ⭐ Actores clave de la red")
+                st.caption("Intermediación: qué tanto pasa por este actor la comunicación entre los demás "
+                           "(si se cae o cambia de postura, la red se reconfigura).")
+                filas = []
+                for _, r in M.head(8).iterrows():
+                    col = actores.POSTURA_COLOR[int(r["postura"])]
+                    ancho = max(4, int(100 * r["intermediacion"] / max(M["intermediacion"].max(), 1e-9)))
+                    filas.append(
+                        f'<div class="sem"><div><div class="n">{r["nombre"]}</div>'
+                        f'<div class="d">{r["cargo"] or r["tipo"]} · {(r["comunidad"] or "externo").replace("C.C. ", "")}'
+                        f' · {r["vinculos"]} vínculos{" · 🔗 puente" if r["puente"] else ""}</div>'
+                        f'<div class="bar"><div style="width:{ancho}%;--c:{col}"></div></div></div>'
+                        f'<span class="badge" style="background:{col}">{r["postura_txt"]}</span></div>')
+                st.markdown("".join(filas), unsafe_allow_html=True)
 
-            a1, a2 = st.columns(2)
-            with a1:
-                st.markdown("#### 📈 Eventos por año")
-                st.plotly_chart(conflictos.por_anio(Cf), width="stretch", config=cfg("conflictos_por_anio"))
-            with a2:
-                st.markdown("#### ⏱️ Días de paralización por comunidad")
-                if Cf["tipo"].isin(conflictos.DE_FUERZA).any():
-                    st.plotly_chart(conflictos.dias_por_comunidad(Cf), width="stretch",
-                                    config=cfg("dias_paralizacion"))
+            c3, c4 = st.columns(2)
+            with c3:
+                st.markdown("#### 🎯 Matriz poder – postura")
+                st.plotly_chart(actores.matriz_poder_interes(M), width="stretch", config=cfg("matriz_poder_postura"))
+                criticos = M[(M["postura"] < 0) & (M["influencia"] >= 4)].sort_values(
+                    ["influencia", "postura", "vinculos"], ascending=[False, True, False]).head(6)
+                if not criticos.empty:
+                    st.warning("**Gestionar de cerca:** " + ", ".join(
+                        f"{r['nombre']} ({(r['comunidad'] or r['organizacion']).replace('C.C. ', '')})"
+                        for _, r in criticos.iterrows()))
+            with c4:
+                st.markdown("#### ⚖️ Balance de posturas por comunidad")
+                if (M["comunidad"] != "").any():
+                    st.plotly_chart(actores.balance_comunidades(M), width="stretch", config=cfg("balance_posturas"))
+                st.markdown("#### 🔗 Relaciones entre comunidades")
+                com_de = A.set_index("nombre")["comunidad"]
+                inter = R_f.assign(c_o=R_f["origen"].map(com_de), c_d=R_f["destino"].map(com_de))
+                inter = inter[(inter["c_o"] != "") & (inter["c_d"] != "") & (inter["c_o"] != inter["c_d"])]
+                if inter.empty:
+                    st.caption("Sin relaciones registradas entre comunidades con estos filtros.")
                 else:
-                    st.caption("Sin medidas de fuerza con estos filtros.")
-            st.markdown("#### 🎯 ¿Por qué protestan?")
-            st.plotly_chart(conflictos.motivos(Cf), width="stretch", config=cfg("motivos_conflicto"))
-            with st.container():  # a todo el ancho para que los nombres de las comunidades no se tapen
-                st.markdown("#### 🔗 Incumplimiento y conflicto")
-                desde_c = date(hoy.year - 3, hoy.month, 1)
-                ind_c = visual.indice_comunidades(base_df[base_df["comunidad"].isin(COMS_C["comunidad"])], COMS_C)
-                varios = COMS_C["proyecto"].nunique() > 1
-                st.plotly_chart(conflictos.relacion_compromisos(
-                    C, ind_c, desde_c, proyectos=dict(zip(COMS_C["comunidad"], COMS_C["proyecto"])),
-                    ancho_px=370 if MOVIL else 900,
-                    colores=portafolio.colores(st.session_state.comunidades)), width="stretch",
-                    config=cfg("incumplimiento_y_conflicto"))
-                st.caption(f"Cada punto es una comunidad: compromisos vencidos hoy vs. eventos de conflicto desde "
-                           f"{desde_c:%Y}. El tamaño crece con los días de paralización. "
-                           + ("El color indica la unidad o el proyecto: haz clic en la leyenda para ocultar o "
-                              "mostrar uno." if varios else "El color indica el semáforo de la comunidad."))
+                    st.dataframe(
+                        inter.assign(Entre=inter["c_o"].str.replace("C.C. ", "") + " ↔ " + inter["c_d"].str.replace("C.C. ", ""))
+                        [["Entre", "tipo", "descripcion"]].rename(columns={"tipo": "Relación", "descripcion": "Detalle"}),
+                        hide_index=True, width="stretch")
 
-    # ------------------------------------------------ registrar eventos
-    with st.expander("➕ Registrar un evento", expanded=C.empty):
-        modo = st.radio("¿Cómo lo registras?", ["📰 Pegar una noticia o reporte (la IA lo ordena)",
-                                                "✍️ Llenar un formulario"], horizontal=True, key="conf_modo")
-        if modo.startswith("📰"):
-            noticia = st.text_area("Pega la noticia, el reporte de la Defensoría o tu informe de campo", height=160,
-                                   key="conf_texto",
-                                   placeholder="Ej.: Desde el lunes comuneros de Llacctapampa bloquean el puente "
-                                               "Ccollpa exigiendo el cumplimiento del acta…")
-            n1, n2 = st.columns([1, 1])
-            com_def = n1.selectbox("Comunidad por defecto", [""] + COMUNIDADES["comunidad"].tolist(),
-                                   key="conf_com_def")
-            if n2.button("🧠 Extraer eventos", type="primary", disabled=not (hay_clave and noticia.strip())):
-                with st.spinner("Leyendo el texto…"):
-                    try:
-                        ext_e, _ = ia.extraer_eventos(noticia, hoy, f"Comunidades de la zona: "
-                                                      f"{', '.join(COMUNIDADES['comunidad'])}")
-                        st.session_state.eventos_nuevos = conflictos.desde_extraccion(ext_e, COMUNIDADES, com_def)
-                    except Exception as e:  # noqa: BLE001
-                        st.error(f"No se pudo extraer: {str(e)[:200]}")
-            if not hay_clave:
-                st.caption("Necesita una clave de IA configurada; mientras tanto usa el formulario.")
-        else:
-            with st.form("form_evento", clear_on_submit=True):
-                f1, f2, f3 = st.columns(3)
-                fe = f1.date_input("Fecha", value=hoy, format="DD/MM/YYYY")
-                ti = f2.selectbox("Tipo de medida", list(conflictos.TIPO_COLOR))
-                co = f3.selectbox("Comunidad", COMUNIDADES["comunidad"].tolist())
-                tt = st.text_input("Qué pasó (título)", placeholder="Bloqueo del puente Ccollpa")
-                g1, g2 = st.columns(2)
-                lu = g1.text_input("Lugar exacto", placeholder="Puente Ccollpa, km 12")
-                cv = g2.text_input("Quién convocó", placeholder="Frente de Defensa…")
-                de = st.text_input("Qué exigían")
-                g3, g4, g5, g6 = st.columns(4)
-                du = g3.number_input("Duración (días)", 0, 365, 1)
-                pa = g4.number_input("Participantes aprox.", 0, 100000, 100, step=50)
-                vi = g5.checkbox("Hubo violencia")
-                ds = g6.selectbox("Desenlace", ["Mesa de diálogo", "Acta de acuerdos", "Levantamiento sin acuerdo",
-                                                "Intervención policial", "Declaratoria de emergencia", "En curso",
-                                                "Otro"])
-                tema_ev = st.selectbox("Tema", ["Agua", "Empleo local", "Salud", "Educación", "Infraestructura",
-                                                "Tierras", "Ambiente", "Proyectos productivos", "Monitoreo",
-                                                "Comunicación", "Otro"])
-                if st.form_submit_button("Agregar a la revisión", type="primary") and tt:
-                    lat0, lon0 = COMUNIDADES.set_index("comunidad").loc[co, ["lat", "lon"]]
-                    st.session_state.eventos_nuevos = conflictos.normalizar(pd.DataFrame([dict(
-                        fecha=fe, tipo=ti, titulo=tt, lugar=lu, comunidad=co, lat=lat0, lon=lon0, convocantes=cv,
-                        demanda=de, tema=tema_ev, duracion_dias=du, participantes=pa, intensidad="media",
-                        hubo_violencia=vi, desenlace=ds, fuente="registro manual")]))
-
-        nuevos_ev = st.session_state.get("eventos_nuevos")
-        if nuevos_ev is not None:
-            if nuevos_ev.empty:
-                st.info("La IA no encontró hechos de conflicto en ese texto.")
+        # ------------------------------------------------ dinamica: cambios de postura
+        st.markdown("### ⏳ Dinámica de posturas en el territorio")
+        d1, d2 = st.columns([1, 2.2])
+        periodo = d1.radio("Comparar contra", ["3 meses atrás", "6 meses atrás", "1 año atrás", "Primer registro"],
+                           index=1, key="act_periodo")
+        meses = {"3 meses atrás": 3, "6 meses atrás": 6, "1 año atrás": 12}.get(periodo)
+        desde = (pd.Timestamp(corte) - pd.DateOffset(months=meses)).date() if meses else min(H["fecha"])
+        Hf = H[H["nombre"].isin(A["nombre"])]
+        if sel_coms:
+            Hf = Hf[Hf["nombre"].isin(A_f["nombre"])]
+        cam = actores.cambios(Hf, desde, corte)
+        alejan, acercan = cam[cam["delta"] < 0], cam[cam["delta"] > 0]
+        d1.markdown(
+            f'<div class="kpis" style="grid-template-columns:1fr 1fr">'
+            + kpi("↘️ Se alejan", f"{len(alejan)}", f"{int((alejan['influencia'] >= 4).sum())} con alta influencia", "#c2410c")
+            + kpi("↗️ Se acercan", f"{len(acercan)}", "oportunidad de alianza", "#1c5cab") + "</div>",
+            unsafe_allow_html=True)
+        if not alejan.empty:
+            r = alejan.iloc[0]
+            d1.error(f"**Alerta temprana:** {r['nombre']} pasó de *{actores.POSTURA_TXT[r['antes']]}* a "
+                     f"*{actores.POSTURA_TXT[r['ahora']]}* ({r['fecha_cambio']:%d/%m/%Y}, {r['reunion']}). "
+                     f"“{r['evidencia']}”")
+        with d2:
+            st.markdown(f"#### Quién cambió de postura desde el {desde:%d/%m/%Y}")
+            if cam.empty:
+                st.info("Nadie cambió de postura en este periodo.")
             else:
-                st.markdown(f"**{len(nuevos_ev)} evento(s) para revisar.** Corrige la ubicación (lat/lon) si "
-                            "conoces el punto exacto.")
-                rev = st.data_editor(nuevos_ev, num_rows="dynamic", hide_index=True, width="stretch",
-                                     key="ed_eventos_nuevos",
-                                     column_config={"fecha": st.column_config.DateColumn(format="DD/MM/YYYY"),
-                                                    "tipo": st.column_config.SelectboxColumn(
-                                                        options=list(conflictos.TIPO_COLOR))})
-                if st.button("✅ Guardar en el historial", type="primary"):
-                    st.session_state.conflictos = conflictos.normalizar(
-                        pd.concat([st.session_state.conflictos, rev], ignore_index=True))
-                    st.session_state.eventos_nuevos = None
-                    st.toast("✅ Evento guardado: ya aparece en el mapa y la cronología.")
-                    st.rerun()
+                st.plotly_chart(actores.figura_cambios(cam.head(14)), width="stretch", config=cfg("cambios_postura"))
+                st.caption("○ postura antes → ● postura ahora. Naranja: se aleja de la empresa; azul: se acerca. "
+                           "Ordenado por riesgo (cuánto se movió × su influencia). Pasa el mouse para ver la evidencia.")
+        st.markdown("#### 📈 Trayectoria de cada actor, reunión tras reunión")
+        # por defecto: los actores influyentes con la historia mas movida (mas posturas distintas)
+        mov_h = (Hf[Hf["fecha"] <= corte].groupby("nombre")
+                 .agg(n=("postura", "nunique"), inf=("influencia", "max"), reg=("postura", "size")))
+        mov_h = mov_h[mov_h["reg"] >= 3].assign(score=lambda d: d["n"] * d["inf"]).sort_values("score", ascending=False)
+        por_defecto = mov_h.index[:4].tolist() or cam["nombre"].head(4).tolist()
+        elegidos = st.multiselect("Actores a seguir", sorted(H["nombre"].unique()), default=por_defecto,
+                                  key="act_tray", max_selections=6)
+        if elegidos:
+            st.plotly_chart(actores.figura_trayectorias(H[H["fecha"] <= corte], elegidos), width="stretch",
+                            config=cfg("trayectorias_actores"))
+        if not cam.empty:
+            st.dataframe(
+                cam.assign(antes=cam["antes"].map(actores.POSTURA_TXT), ahora=cam["ahora"].map(actores.POSTURA_TXT),
+                           comunidad=cam["comunidad"].str.replace("C.C. ", ""))
+                [["nombre", "comunidad", "antes", "ahora", "fecha_cambio", "reunion", "evidencia"]]
+                .rename(columns={"nombre": "Actor", "comunidad": "Comunidad", "antes": "Antes", "ahora": "Ahora",
+                                 "fecha_cambio": "Cambió el", "reunion": "Reunión", "evidencia": "Evidencia"}),
+                hide_index=True, width="stretch",
+                column_config={"Cambió el": st.column_config.DateColumn(format="DD/MM/YYYY")})
 
-    with st.expander("📝 Editar, cargar o descargar el historial"):
-        C_ed = st.data_editor(C.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_conflictos",
-                              column_config={"fecha": st.column_config.DateColumn(format="DD/MM/YYYY")})
-        e1, e2, e3 = st.columns(3)
-        if e1.button("Guardar cambios del historial"):
-            st.session_state.conflictos = conflictos.normalizar(
-                portafolio.reemplazar(st.session_state.conflictos, V["conflictos"], C_ed))
-            st.rerun()
-        e2.download_button("⬇️ Historial (CSV)", C.to_csv(index=False).encode("utf-8"), "conflictos.csv", "text/csv")
-        sub_c = e3.file_uploader("Cargar historial (CSV)", type=["csv"], key="csv_conflictos",
-                                 label_visibility="collapsed")
-        if sub_c is not None and st.button("Usar este historial"):
-            st.session_state.conflictos = conflictos.normalizar(pd.read_csv(sub_c))
-            st.rerun()
-        st.caption("Columnas: " + ", ".join(conflictos.COLUMNAS) + ". Puedes cargar tu propia base, por ejemplo la "
-                   "que armes a partir de los reportes mensuales de la Defensoría del Pueblo.")
+        with st.expander("📝 Editar y descargar el mapa de actores"):
+            e1, e2 = st.columns(2)
+            A_ed = e1.data_editor(V["actores"].reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch",
+                                  key="ed_actores", column_config={
+                                      "postura_publica": st.column_config.TextColumn(
+                                          "Postura en público", help="Solo si en asamblea dice algo distinto de lo que "
+                                          "dice en privado: -2 opositor … 2 aliado. Vacío = igual."),
+                                      "interes_fondo": st.column_config.TextColumn(
+                                          "Interés de fondo (reservado)", width="large",
+                                          help="Lo que explica su postura y no está escrito en ningún acta: "
+                                               "antecedentes, aspiraciones, agravios. Solo para el equipo.")})
+            R_ed = e2.data_editor(R.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_relaciones")
+            b1, b2, b3 = st.columns(3)
+            if b1.button("Guardar cambios del mapa"):
+                st.session_state.actores = actores.normalizar_actores(
+                    portafolio.reemplazar(st.session_state.actores, V["actores"], A_ed))
+                st.session_state.relaciones = actores.normalizar_relaciones(
+                    portafolio.reemplazar(st.session_state.relaciones, V["relaciones"], R_ed))
+                st.rerun()
+            b2.download_button("⬇️ Actores (CSV)", V["actores"].to_csv(index=False).encode("utf-8"), "actores.csv", "text/csv")
+            b3.download_button("⬇️ Relaciones (CSV)", R.to_csv(index=False).encode("utf-8"), "relaciones.csv", "text/csv")
+            st.download_button("⬇️ Historial de posturas (CSV)", H.to_csv(index=False).encode("utf-8"),
+                               "historial_posturas.csv", "text/csv")
+
+# ---------------------------------------------------------------- 2c. conflictividad
+if "conflictividad" in MODS:
+    with tab_conflictos:
+        C = V["conflictos"]
+        st.markdown("La memoria del territorio: **paralizaciones, bloqueos de vías, tomas y otras manifestaciones** "
+                    "contra la empresa, con el lugar exacto donde ocurrieron, quién convocó, qué exigían y cómo terminó. "
+                    "Sirve para anticipar: los conflictos suelen repetirse en los mismos lugares y por las mismas demandas.")
+        if C.empty:
+            st.info("Aún no hay eventos registrados. Agrégalos abajo, en **Registrar un evento**.")
+        else:
+            anios = sorted({f.year for f in C["fecha"]})
+            proy_de = dict(zip(COMUNIDADES["comunidad"], COMUNIDADES["proyecto"]))
+            varios_p = COMUNIDADES["proyecto"].nunique() > 1
+            h1, h2, h3 = st.columns([1.3, 1.4, 1.3])
+            rango = h1.slider("Años", anios[0], max(anios[-1], anios[0] + 1), (anios[0], anios[-1]), key="conf_anios") \
+                if len(anios) > 1 else (anios[0], anios[0])
+            tipos_f = h2.multiselect("Tipo de medida", list(conflictos.TIPO_COLOR), placeholder="Todas", key="conf_tipo")
+            if varios_p:  # primero la unidad o el proyecto: es lo que todos conocen
+                proys_f = h3.multiselect("Unidad o proyecto", portafolio.lista(COMUNIDADES), placeholder="Todos",
+                                         key="conf_proy")
+            else:
+                proys_f = []
+            opciones_c = sorted(c for c in C["comunidad"].unique() if c and (not proys_f or proy_de.get(c) in proys_f))
+            coms_f = st.multiselect("Comunidad", opciones_c, placeholder="Todas", key="conf_com",
+                                    format_func=lambda c: f"{c} · {proy_de.get(c, '')}" if varios_p else c) \
+                if varios_p else h3.multiselect("Comunidad", opciones_c, placeholder="Todas", key="conf_com")
+            Cf = C[C["fecha"].map(lambda f: rango[0] <= f.year <= rango[1])]
+            COMS_C = COMUNIDADES[COMUNIDADES["proyecto"].isin(proys_f)] if proys_f else COMUNIDADES
+            if proys_f:
+                Cf = Cf[Cf["comunidad"].map(proy_de).isin(proys_f)]
+            if tipos_f:
+                Cf = Cf[Cf["tipo"].isin(tipos_f)]
+            if coms_f:
+                Cf = Cf[Cf["comunidad"].isin(coms_f)]
+            kc = conflictos.indicadores(Cf, hoy)
+            st.markdown('<div class="kpis">' + "".join([
+                kpi("Eventos registrados", f"{kc['eventos']}", f"{kc['medidas_fuerza']} medidas de fuerza", "#2d4a33"),
+                kpi("⏱️ Días de paralización", f"{kc['dias_paralizacion']}", "bloqueos, paros y tomas", "#a32424"),
+                kpi("🚧 Bloqueos de vía", f"{kc['bloqueos']}", "tránsito y operación afectados", "#c2410c"),
+                kpi("⚠️ Con violencia", f"{kc['con_violencia']}", "heridos, detenidos o daños", "#111827"),
+                kpi("📅 Último evento", f"{kc['dias_desde_ultimo']} días" if kc["ultimo"] else "–",
+                    f"{kc['ultimo']:%d/%m/%Y}" + (f" · {kc['en_curso']} en curso" if kc["en_curso"] else "")
+                    if kc["ultimo"] else "", "#eda100"),
+            ]) + "</div>", unsafe_allow_html=True)
+
+            filtros_c = " · ".join([f"{rango[0]}–{rango[1]}"] + [", ".join(tipos_f)] * bool(tipos_f)
+                                   + [", ".join(c.replace("C.C. ", "") for c in coms_f)] * bool(coms_f))
+            with st.popover("📥 Bajar estos gráficos para una presentación", width="stretch"):
+                st.markdown("**7 láminas en 4K (3840 × 2160)**, una por gráfico y cada una con su mensaje clave: "
+                            "resumen, mapa de conflictos, cronología, eventos por año, días de paralización, motivos e "
+                            "incumplimiento vs. conflicto. Respetan los filtros activos.")
+                fondo_lc = FONDO_LAMINA[st.radio("Fondo del mapa", list(FONDO_LAMINA), horizontal=True,
+                                                 key="fondo_lam_conf")]
+                clave_c = (PROY, filtros_c, hoy, cliente, len(Cf), int(Cf["duracion_dias"].sum()) if not Cf.empty else 0,
+                           fondo_lc)
+                if st.button("Preparar láminas", type="primary", disabled=Cf.empty, key="btn_lam_conf"):
+                    with st.spinner("Dibujando las láminas en alta resolución (descargando el mapa satelital)…"):
+                        st.session_state.laminas_conf = (clave_c, laminas_conf_cache(Cf, base_df, hoy, cliente_lam,
+                                                                                    filtros_c, fondo_lc, COMUNIDADES))
+                lc = st.session_state.get("laminas_conf")
+                if lc and lc[0] == clave_c:
+                    q1, q2 = st.columns(2)
+                    q1.download_button("⬇️ PowerPoint (.pptx)", lc[1][0], width="stretch",
+                                       file_name=f"confluentia_conflictividad_{hoy:%Y%m%d}.pptx", key="dl_conf_pptx",
+                                       mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                    q2.download_button("⬇️ Imágenes PNG (.zip)", lc[1][1], width="stretch", key="dl_conf_zip",
+                                       file_name=f"confluentia_conflictividad_{hoy:%Y%m%d}.zip", mime="application/zip")
+                st.caption("Cada gráfico de esta pestaña también se baja suelto con el ícono 📷 al pasar el mouse.")
+
+            if Cf.empty:
+                st.info("No hay eventos con estos filtros.")
+            else:
+                m1, m2 = st.columns([1.75, 1])
+                with m1:
+                    st.markdown("#### 📍 Dónde ocurrieron")
+                    fondo_c = st.segmented_control("Fondo", list(visual.FONDOS), default="🛰️ Satélite",
+                                                   label_visibility="collapsed", key="conf_fondo") or "🛰️ Satélite"
+                    st.plotly_chart(conflictos.mapa(Cf, COMS_C, fondo_c), width="stretch",
+                                    config=cfg("mapa_conflictos", zoom=True))
+                    st.caption("Calor: lugares con más días de paralización. Cada punto es un evento, coloreado por tipo; "
+                               "el tamaño crece con la duración. Pasa el mouse para ver quién convocó y qué exigían.")
+                with m2:
+                    st.markdown("#### 🕑 Eventos más recientes")
+                    tarjetas = []
+                    for _, r in Cf.head(6).iterrows():
+                        col = conflictos.TIPO_COLOR.get(r["tipo"], "#8a8984")
+                        extra = " · ⚠️ violencia" if r["hubo_violencia"] else ""
+                        tarjetas.append(
+                            f'<div class="alerta" style="--c:{col}"><div class="t">{r["titulo"]}</div>'
+                            f'<div class="m">{r["fecha"]:%d/%m/%Y} · {r["tipo"]} · {r["lugar"] or r["comunidad"]}</div>'
+                            f'<div class="m">{r["duracion_dias"]} días · {r["desenlace"] or "sin desenlace"}{extra}</div>'
+                            f'</div>')
+                    st.markdown("".join(tarjetas), unsafe_allow_html=True)
+                    lugares = Cf[Cf["lugar"] != ""].groupby("lugar").agg(n=("tipo", "count"),
+                                                                         dias=("duracion_dias", "sum"))
+                    lugares = lugares[lugares["n"] >= 2].sort_values(["n", "dias"], ascending=False)
+                    if not lugares.empty:
+                        st.warning("**Puntos calientes que se repiten:** " + "; ".join(
+                            f"{l} ({r.n} eventos, {r.dias} días)" for l, r in lugares.head(3).iterrows()))
+
+                st.markdown("#### 📜 Cronología del conflicto por comunidad")
+                st.plotly_chart(conflictos.cronologia(Cf), width="stretch", config=cfg("cronologia_conflictos"))
+                st.caption("Tamaño: duración de la medida. Borde negro: hubo violencia.")
+
+                a1, a2 = st.columns(2)
+                with a1:
+                    st.markdown("#### 📈 Eventos por año")
+                    st.plotly_chart(conflictos.por_anio(Cf), width="stretch", config=cfg("conflictos_por_anio"))
+                with a2:
+                    st.markdown("#### ⏱️ Días de paralización por comunidad")
+                    if Cf["tipo"].isin(conflictos.DE_FUERZA).any():
+                        st.plotly_chart(conflictos.dias_por_comunidad(Cf), width="stretch",
+                                        config=cfg("dias_paralizacion"))
+                    else:
+                        st.caption("Sin medidas de fuerza con estos filtros.")
+                st.markdown("#### 🎯 ¿Por qué protestan?")
+                st.plotly_chart(conflictos.motivos(Cf), width="stretch", config=cfg("motivos_conflicto"))
+                with st.container():  # a todo el ancho para que los nombres de las comunidades no se tapen
+                    st.markdown("#### 🔗 Incumplimiento y conflicto")
+                    desde_c = date(hoy.year - 3, hoy.month, 1)
+                    ind_c = visual.indice_comunidades(base_df[base_df["comunidad"].isin(COMS_C["comunidad"])], COMS_C)
+                    varios = COMS_C["proyecto"].nunique() > 1
+                    st.plotly_chart(conflictos.relacion_compromisos(
+                        C, ind_c, desde_c, proyectos=dict(zip(COMS_C["comunidad"], COMS_C["proyecto"])),
+                        ancho_px=370 if MOVIL else 900,
+                        colores=portafolio.colores(st.session_state.comunidades)), width="stretch",
+                        config=cfg("incumplimiento_y_conflicto"))
+                    st.caption(f"Cada punto es una comunidad: compromisos vencidos hoy vs. eventos de conflicto desde "
+                               f"{desde_c:%Y}. El tamaño crece con los días de paralización. "
+                               + ("El color indica la unidad o el proyecto: haz clic en la leyenda para ocultar o "
+                                  "mostrar uno." if varios else "El color indica el semáforo de la comunidad."))
+
+        # ------------------------------------------------ registrar eventos
+        with st.expander("➕ Registrar un evento", expanded=C.empty):
+            modo = st.radio("¿Cómo lo registras?", ["📰 Pegar una noticia o reporte (la IA lo ordena)",
+                                                    "✍️ Llenar un formulario"], horizontal=True, key="conf_modo")
+            if modo.startswith("📰"):
+                noticia = st.text_area("Pega la noticia, el reporte de la Defensoría o tu informe de campo", height=160,
+                                       key="conf_texto",
+                                       placeholder="Ej.: Desde el lunes comuneros de Llacctapampa bloquean el puente "
+                                                   "Ccollpa exigiendo el cumplimiento del acta…")
+                n1, n2 = st.columns([1, 1])
+                com_def = n1.selectbox("Comunidad por defecto", [""] + COMUNIDADES["comunidad"].tolist(),
+                                       key="conf_com_def")
+                if n2.button("🧠 Extraer eventos", type="primary", disabled=not (hay_clave and noticia.strip())):
+                    with st.spinner("Leyendo el texto…"):
+                        try:
+                            ext_e, _ = ia.extraer_eventos(noticia, hoy, f"Comunidades de la zona: "
+                                                          f"{', '.join(COMUNIDADES['comunidad'])}")
+                            st.session_state.eventos_nuevos = conflictos.desde_extraccion(ext_e, COMUNIDADES, com_def)
+                        except Exception as e:  # noqa: BLE001
+                            st.error(f"No se pudo extraer: {str(e)[:200]}")
+                if not hay_clave:
+                    st.caption("Necesita una clave de IA configurada; mientras tanto usa el formulario.")
+            else:
+                with st.form("form_evento", clear_on_submit=True):
+                    f1, f2, f3 = st.columns(3)
+                    fe = f1.date_input("Fecha", value=hoy, format="DD/MM/YYYY")
+                    ti = f2.selectbox("Tipo de medida", list(conflictos.TIPO_COLOR))
+                    co = f3.selectbox("Comunidad", COMUNIDADES["comunidad"].tolist())
+                    tt = st.text_input("Qué pasó (título)", placeholder="Bloqueo del puente Ccollpa")
+                    g1, g2 = st.columns(2)
+                    lu = g1.text_input("Lugar exacto", placeholder="Puente Ccollpa, km 12")
+                    cv = g2.text_input("Quién convocó", placeholder="Frente de Defensa…")
+                    de = st.text_input("Qué exigían")
+                    g3, g4, g5, g6 = st.columns(4)
+                    du = g3.number_input("Duración (días)", 0, 365, 1)
+                    pa = g4.number_input("Participantes aprox.", 0, 100000, 100, step=50)
+                    vi = g5.checkbox("Hubo violencia")
+                    ds = g6.selectbox("Desenlace", ["Mesa de diálogo", "Acta de acuerdos", "Levantamiento sin acuerdo",
+                                                    "Intervención policial", "Declaratoria de emergencia", "En curso",
+                                                    "Otro"])
+                    tema_ev = st.selectbox("Tema", ["Agua", "Empleo local", "Salud", "Educación", "Infraestructura",
+                                                    "Tierras", "Ambiente", "Proyectos productivos", "Monitoreo",
+                                                    "Comunicación", "Otro"])
+                    if st.form_submit_button("Agregar a la revisión", type="primary") and tt:
+                        lat0, lon0 = COMUNIDADES.set_index("comunidad").loc[co, ["lat", "lon"]]
+                        st.session_state.eventos_nuevos = conflictos.normalizar(pd.DataFrame([dict(
+                            fecha=fe, tipo=ti, titulo=tt, lugar=lu, comunidad=co, lat=lat0, lon=lon0, convocantes=cv,
+                            demanda=de, tema=tema_ev, duracion_dias=du, participantes=pa, intensidad="media",
+                            hubo_violencia=vi, desenlace=ds, fuente="registro manual")]))
+
+            nuevos_ev = st.session_state.get("eventos_nuevos")
+            if nuevos_ev is not None:
+                if nuevos_ev.empty:
+                    st.info("La IA no encontró hechos de conflicto en ese texto.")
+                else:
+                    st.markdown(f"**{len(nuevos_ev)} evento(s) para revisar.** Corrige la ubicación (lat/lon) si "
+                                "conoces el punto exacto.")
+                    rev = st.data_editor(nuevos_ev, num_rows="dynamic", hide_index=True, width="stretch",
+                                         key="ed_eventos_nuevos",
+                                         column_config={"fecha": st.column_config.DateColumn(format="DD/MM/YYYY"),
+                                                        "tipo": st.column_config.SelectboxColumn(
+                                                            options=list(conflictos.TIPO_COLOR))})
+                    if st.button("✅ Guardar en el historial", type="primary"):
+                        st.session_state.conflictos = conflictos.normalizar(
+                            pd.concat([st.session_state.conflictos, rev], ignore_index=True))
+                        st.session_state.eventos_nuevos = None
+                        st.toast("✅ Evento guardado: ya aparece en el mapa y la cronología.")
+                        st.rerun()
+
+        with st.expander("📝 Editar, cargar o descargar el historial"):
+            C_ed = st.data_editor(C.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_conflictos",
+                                  column_config={"fecha": st.column_config.DateColumn(format="DD/MM/YYYY")})
+            e1, e2, e3 = st.columns(3)
+            if e1.button("Guardar cambios del historial"):
+                st.session_state.conflictos = conflictos.normalizar(
+                    portafolio.reemplazar(st.session_state.conflictos, V["conflictos"], C_ed))
+                st.rerun()
+            e2.download_button("⬇️ Historial (CSV)", C.to_csv(index=False).encode("utf-8"), "conflictos.csv", "text/csv")
+            sub_c = e3.file_uploader("Cargar historial (CSV)", type=["csv"], key="csv_conflictos",
+                                     label_visibility="collapsed")
+            if sub_c is not None and st.button("Usar este historial"):
+                st.session_state.conflictos = conflictos.normalizar(pd.read_csv(sub_c))
+                st.rerun()
+            st.caption("Columnas: " + ", ".join(conflictos.COLUMNAS) + ". Puedes cargar tu propia base, por ejemplo la "
+                       "que armes a partir de los reportes mensuales de la Defensoría del Pueblo.")
 
 # ---------------------------------------------------------------- riesgos y decisiones
 POSTURA_OPC = [f"{k:+d} · {v}" if k else f"0 · {v}" for k, v in actores.POSTURA_TXT.items()]
@@ -1236,49 +1267,50 @@ def postura_opc(v: int) -> str:
     return POSTURA_OPC[int(v) + 2]
 
 
-with tab_riesgos:
-    selector_proyecto("proy_riesgos")
-    A_hoy = actores.al_corte(V["actores"], V["posturas"], hoy)
-    R_r, H_r, C_r = V["relaciones"], V["posturas"], V["conflictos"]
-    P_r, PA_r = V["procesos"], V["partes"]
-    ES_r, AC_r = V["escenarios"], V["acciones"]
-    st.markdown("Del diagnóstico a la decisión. Para cada **proceso clave** (una servidumbre, un contrato con una "
-                "empresa comunal, un monitoreo) la herramienta cruza lo que ya sabe del territorio: **quién está en "
-                "contra y cuánto pesa**, **qué conflictos hubo antes** en esa comunidad, **qué compromisos están "
-                "vencidos**, **quién se está alejando** y **qué detonantes hay en el contexto** (denuncias, cambio "
-                "de directiva, normas, seguridad). Con eso estima el riesgo de paralización, te dice **qué hacer "
-                "primero y cuánto bajaría el riesgo**, y te deja probar escenarios antes de decidir.")
-    if P_r.empty:
-        st.info("Aún no hay procesos. Agrégalos abajo, en **Editar procesos y actores**.")
-    else:
-        CTX_r = V.get("contexto")
-        cart = riesgos.cartera(P_r, PA_r, A_hoy, H_r, C_r, base_df, hoy, contexto=CTX_r)
-        pend = AC_r[AC_r["estado"] != "Hecha"]
-        prox = cart.dropna(subset=["dias_plazo"]).sort_values("dias_plazo")
-        prox = prox[prox["dias_plazo"] >= 0]
-        st.markdown('<div class="kpis">' + "".join([
-            kpi("Procesos en seguimiento", f"{len(cart)}", f"{(cart['impacto'] >= 4).sum()} de alto impacto", "#2d4a33"),
-            kpi("🔴 Riesgo alto", f"{(cart['nivel'] == 'Alto').sum()}", "pueden paralizarse", "#d03b3b"),
-            kpi("🟡 Riesgo medio", f"{(cart['nivel'] == 'Medio').sum()}", "requieren atención", "#eda100"),
-            kpi("📅 Próximo hito", f"{int(prox.iloc[0]['dias_plazo'])} días" if not prox.empty else "–",
-                __import__("textwrap").shorten(prox.iloc[0]["proceso"], 44, placeholder="…") if not prox.empty else "", "#1c5cab"),
-            kpi("📋 Acciones pendientes", f"{len(pend)}",
-                f"{int((pend['fecha'].notna() & (pend['fecha'] < hoy)).sum())} atrasadas", "#5b6675"),
-        ]) + "</div>", unsafe_allow_html=True)
+if "riesgos" in MODS:
+    with tab_riesgos:
+        selector_proyecto("proy_riesgos")
+        A_hoy = actores.al_corte(V["actores"], V["posturas"], hoy)
+        R_r, H_r, C_r = V["relaciones"], V["posturas"], V["conflictos"]
+        P_r, PA_r = V["procesos"], V["partes"]
+        ES_r, AC_r = V["escenarios"], V["acciones"]
+        st.markdown("Del diagnóstico a la decisión. Para cada **proceso clave** (una servidumbre, un contrato con una "
+                    "empresa comunal, un monitoreo) la herramienta cruza lo que ya sabe del territorio: **quién está en "
+                    "contra y cuánto pesa**, **qué conflictos hubo antes** en esa comunidad, **qué compromisos están "
+                    "vencidos**, **quién se está alejando** y **qué detonantes hay en el contexto** (denuncias, cambio "
+                    "de directiva, normas, seguridad). Con eso estima el riesgo de paralización, te dice **qué hacer "
+                    "primero y cuánto bajaría el riesgo**, y te deja probar escenarios antes de decidir.")
+        if P_r.empty:
+            st.info("Aún no hay procesos. Agrégalos abajo, en **Editar procesos y actores**.")
+        else:
+            CTX_r = V.get("contexto")
+            cart = riesgos.cartera(P_r, PA_r, A_hoy, H_r, C_r, base_df, hoy, contexto=CTX_r)
+            pend = AC_r[AC_r["estado"] != "Hecha"]
+            prox = cart.dropna(subset=["dias_plazo"]).sort_values("dias_plazo")
+            prox = prox[prox["dias_plazo"] >= 0]
+            st.markdown('<div class="kpis">' + "".join([
+                kpi("Procesos en seguimiento", f"{len(cart)}", f"{(cart['impacto'] >= 4).sum()} de alto impacto", "#2d4a33"),
+                kpi("🔴 Riesgo alto", f"{(cart['nivel'] == 'Alto').sum()}", "pueden paralizarse", "#d03b3b"),
+                kpi("🟡 Riesgo medio", f"{(cart['nivel'] == 'Medio').sum()}", "requieren atención", "#eda100"),
+                kpi("📅 Próximo hito", f"{int(prox.iloc[0]['dias_plazo'])} días" if not prox.empty else "–",
+                    __import__("textwrap").shorten(prox.iloc[0]["proceso"], 44, placeholder="…") if not prox.empty else "", "#1c5cab"),
+                kpi("📋 Acciones pendientes", f"{len(pend)}",
+                    f"{int((pend['fecha'].notna() & (pend['fecha'] < hoy)).sum())} atrasadas", "#5b6675"),
+            ]) + "</div>", unsafe_allow_html=True)
 
-        c1, c2 = st.columns([1.1, 1])
-        with c1:
-            st.markdown("##### Cartera de procesos: riesgo vs. impacto")
-            st.plotly_chart(riesgos.figura_cartera(cart, alto=330), width="stretch",
-                            config=cfg("cartera_procesos"))
-        with c2:
-            st.markdown("##### Prioridad (riesgo × impacto), de mayor a menor")
-            filas_p = []
-            for _, c_ in cart.iterrows():
-                col_ = riesgos.NIVEL_COLOR[c_["nivel"]]
-                falta = (f"faltan {int(c_['dias_plazo'])} días" if pd.notna(c_["dias_plazo"]) and c_["dias_plazo"] >= 0
-                         else "plazo vencido" if pd.notna(c_["dias_plazo"]) else "sin plazo")
-                filas_p.append(f"""
+            c1, c2 = st.columns([1.1, 1])
+            with c1:
+                st.markdown("##### Cartera de procesos: riesgo vs. impacto")
+                st.plotly_chart(riesgos.figura_cartera(cart, alto=330), width="stretch",
+                                config=cfg("cartera_procesos"))
+            with c2:
+                st.markdown("##### Prioridad (riesgo × impacto), de mayor a menor")
+                filas_p = []
+                for _, c_ in cart.iterrows():
+                    col_ = riesgos.NIVEL_COLOR[c_["nivel"]]
+                    falta = (f"faltan {int(c_['dias_plazo'])} días" if pd.notna(c_["dias_plazo"]) and c_["dias_plazo"] >= 0
+                             else "plazo vencido" if pd.notna(c_["dias_plazo"]) else "sin plazo")
+                    filas_p.append(f"""
 <div class="evento" style="border-left:6px solid {col_};padding:10px 14px">
   <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline">
     <div style="font-weight:700;font-size:14.5px">{c_['id']} · {c_['proceso']}</div>
@@ -1290,19 +1322,19 @@ with tab_riesgos:
   <div style="font-size:12.5px;color:#5b6675">{c_['comunidad'].replace('C.C. ', '')} · riesgo {c_['nivel'].lower()} ·
   impacto {c_['impacto']}/5 · {falta}</div>
 </div>""")
-            st.markdown("".join(filas_p), unsafe_allow_html=True)
+                st.markdown("".join(filas_p), unsafe_allow_html=True)
 
-        st.divider()
-        nombres_p = dict(zip(cart["id"], cart["proceso"]))
-        pid = st.selectbox("🔎 Proceso a analizar", list(nombres_p), key="rg_proceso",
-                           format_func=lambda i: f"{i} · {nombres_p[i]}")
-        pr = P_r[P_r["id"] == pid].iloc[0]
-        r0 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy, contexto=CTX_r)
-        color_n = riesgos.NIVEL_COLOR[r0["nivel"]]
-        plazo = (f"{pr['fecha_limite']:%d/%m/%Y} (faltan {r0['dias_plazo']} días)" if r0["dias_plazo"] is not None
-                 and r0["dias_plazo"] >= 0 else f"{pr['fecha_limite']:%d/%m/%Y} (vencido)"
-                 if r0["dias_plazo"] is not None else "sin fecha")
-        st.markdown(f"""
+            st.divider()
+            nombres_p = dict(zip(cart["id"], cart["proceso"]))
+            pid = st.selectbox("🔎 Proceso a analizar", list(nombres_p), key="rg_proceso",
+                               format_func=lambda i: f"{i} · {nombres_p[i]}")
+            pr = P_r[P_r["id"] == pid].iloc[0]
+            r0 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy, contexto=CTX_r)
+            color_n = riesgos.NIVEL_COLOR[r0["nivel"]]
+            plazo = (f"{pr['fecha_limite']:%d/%m/%Y} (faltan {r0['dias_plazo']} días)" if r0["dias_plazo"] is not None
+                     and r0["dias_plazo"] >= 0 else f"{pr['fecha_limite']:%d/%m/%Y} (vencido)"
+                     if r0["dias_plazo"] is not None else "sin fecha")
+            st.markdown(f"""
 <div class="evento" style="border-left:6px solid {color_n}">
   <div style="font-size:19px;font-weight:700;color:#1f2a37">{pr['proceso']}</div>
   <div style="color:#5b6675;margin:2px 0 8px 0">{pr['tipo']} · {pr['comunidad']} · {pr['estado']} ·
@@ -1311,42 +1343,42 @@ with tab_riesgos:
   <b>Si se paraliza:</b> {pr['si_se_paraliza'] or '—'}
 </div>""", unsafe_allow_html=True)
 
-        m1, m2, m3 = st.columns([0.85, 1.2, 1.15])
-        with m1:
-            st.markdown(f"##### Riesgo de paralización: <span style='color:{color_n}'>{r0['nivel']}</span>",
-                        unsafe_allow_html=True)
-            st.plotly_chart(riesgos.figura_medidor(r0["puntos"]), width="stretch", config=cfg("riesgo_proceso"))
-        with m2:
-            st.markdown("##### De dónde viene el riesgo")
-            st.plotly_chart(riesgos.figura_componentes(r0), width="stretch", config=cfg("componentes_riesgo"))
-        with m3:
-            st.markdown("##### Por qué")
-            for n, (pts, txt) in r0["componentes"].items():
-                ic = "🔴" if pts >= 0.6 * riesgos.MAXIMOS[n] else "🟡" if pts >= 0.3 * riesgos.MAXIMOS[n] else "🟢"
-                st.markdown(f"{ic} **{n}:** {txt}.")
-        st.caption("El puntaje (0–100) es una guía para conversar en el equipo, no una predicción: suma la oposición "
-                   "de quienes deciden o pueden vetar (35), los precedentes de medidas de fuerza en la comunidad (15), "
-                   "los compromisos vencidos (15), las posturas que empeoraron en 6 meses (15) y los detonantes y el "
-                   "contexto (20): denuncias ambientales, comerciales o policiales, cambio de directiva, normas en "
-                   "debate y riesgos de seguridad. Para la oposición pesa lo que cada actor dice **en público**.")
+            m1, m2, m3 = st.columns([0.85, 1.2, 1.15])
+            with m1:
+                st.markdown(f"##### Riesgo de paralización: <span style='color:{color_n}'>{r0['nivel']}</span>",
+                            unsafe_allow_html=True)
+                st.plotly_chart(riesgos.figura_medidor(r0["puntos"]), width="stretch", config=cfg("riesgo_proceso"))
+            with m2:
+                st.markdown("##### De dónde viene el riesgo")
+                st.plotly_chart(riesgos.figura_componentes(r0), width="stretch", config=cfg("componentes_riesgo"))
+            with m3:
+                st.markdown("##### Por qué")
+                for n, (pts, txt) in r0["componentes"].items():
+                    ic = "🔴" if pts >= 0.6 * riesgos.MAXIMOS[n] else "🟡" if pts >= 0.3 * riesgos.MAXIMOS[n] else "🟢"
+                    st.markdown(f"{ic} **{n}:** {txt}.")
+            st.caption("El puntaje (0–100) es una guía para conversar en el equipo, no una predicción: suma la oposición "
+                       "de quienes deciden o pueden vetar (35), los precedentes de medidas de fuerza en la comunidad (15), "
+                       "los compromisos vencidos (15), las posturas que empeoraron en 6 meses (15) y los detonantes y el "
+                       "contexto (20): denuncias ambientales, comerciales o policiales, cambio de directiva, normas en "
+                       "debate y riesgos de seguridad. Para la oposición pesa lo que cada actor dice **en público**.")
 
-        # --- si haces esto, pasa esto
-        st.markdown("#### 🧭 Si haces esto, pasa esto")
-        st.caption("La herramienta prueba, actor por actor, qué pasaría con el riesgo si se atiende lo que le "
-                   "preocupa (o si se logra que diga en público lo que dice en privado) y ordena las acciones por "
-                   "su efecto. Es una guía para decidir por dónde empezar, no una garantía.")
-        kw_ev = dict(partes=PA_r, A=A_hoy, H=H_r, conf=C_r, reg=base_df, hoy=hoy, contexto=CTX_r)
-        jug, comb = anticipar.mejores_jugadas(riesgos.evaluar, pr, r0["partes"], r0["puntos"], n=3, **kw_ev)
-        j1, j2 = st.columns([1.35, 1])
-        with j1:
-            if jug.empty:
-                st.info("No hay una acción sobre un solo actor que baje el riesgo: el peso está en el contexto, los "
-                        "precedentes o los compromisos vencidos.")
-            else:
-                html_j = []
-                for k_, (_, j) in enumerate(jug.iterrows(), 1):
-                    fondo_j = f" · <i>De fondo: {j['fondo']}</i>" if j["fondo"] else ""
-                    html_j.append(f"""
+            # --- si haces esto, pasa esto
+            st.markdown("#### 🧭 Si haces esto, pasa esto")
+            st.caption("La herramienta prueba, actor por actor, qué pasaría con el riesgo si se atiende lo que le "
+                       "preocupa (o si se logra que diga en público lo que dice en privado) y ordena las acciones por "
+                       "su efecto. Es una guía para decidir por dónde empezar, no una garantía.")
+            kw_ev = dict(partes=PA_r, A=A_hoy, H=H_r, conf=C_r, reg=base_df, hoy=hoy, contexto=CTX_r)
+            jug, comb = anticipar.mejores_jugadas(riesgos.evaluar, pr, r0["partes"], r0["puntos"], n=3, **kw_ev)
+            j1, j2 = st.columns([1.35, 1])
+            with j1:
+                if jug.empty:
+                    st.info("No hay una acción sobre un solo actor que baje el riesgo: el peso está en el contexto, los "
+                            "precedentes o los compromisos vencidos.")
+                else:
+                    html_j = []
+                    for k_, (_, j) in enumerate(jug.iterrows(), 1):
+                        fondo_j = f" · <i>De fondo: {j['fondo']}</i>" if j["fondo"] else ""
+                        html_j.append(f"""
 <div class="evento" style="border-left:6px solid #1baf7a;padding:10px 14px">
   <div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
     <div style="font-weight:700">{k_}. {j['nombre']} <span style="color:#5b6675;font-weight:500">· {j['rol']}</span></div>
@@ -1355,52 +1387,52 @@ with tab_riesgos:
   <div style="font-size:12.5px;color:#5b6675">{actores.POSTURA_TXT[j['de']]} → <b>{actores.POSTURA_TXT[j['a']]}</b> ·
   el riesgo pasaría de {j['antes']} a <b>{j['despues']}</b>{fondo_j}</div>
 </div>""")
-                st.markdown("".join(html_j), unsafe_allow_html=True)
-                if comb is not None:
-                    st.success(f"Si logras las {len(jug)} jugadas, el riesgo pasaría de **{r0['puntos']}** a "
-                               f"**{comb}** ({riesgos.nivel(comb).lower()}). Hoy una paralización es "
-                               f"**{anticipar.probabilidad(r0['puntos'])}**; después sería "
-                               f"**{anticipar.probabilidad(comb)}**.")
-                faltan_j = jug[~jug["nombre"].isin(AC_r.loc[AC_r["proceso_id"] == pid, "nombre"])]
-                if not faltan_j.empty and st.button(f"➕ Agregar {len(faltan_j)} jugada(s) al plan de acción",
-                                                    key=f"rg_jug_{pid}"):
-                    nuevas = pd.DataFrame([dict(proceso_id=pid, nombre=j["nombre"], estrategia="Atender sus "
-                                                "preocupaciones de cerca", accion=j["accion"],
-                                                responsable=pr["responsable"], fecha=None, estado="Pendiente")
-                                           for _, j in faltan_j.iterrows()])
-                    st.session_state.acciones = riesgos.normalizar_acciones(
-                        pd.concat([st.session_state.acciones, nuevas], ignore_index=True))
-                    st.rerun()
-        with j2:
-            st.markdown("##### 📈 ¿Está funcionando el plan?")
-            tend = anticipar.tendencia(riesgos.evaluar, pr, PA_r, V["actores"], H_r, C_r, V["registro"], hoy, CTX_r)
-            if len(tend) > 1:
-                st.plotly_chart(anticipar.figura_tendencia(tend), width="stretch", config=cfg("tendencia_riesgo"))
-                d_ = int(tend["puntos"].iloc[-1] - tend["puntos"].iloc[0])
-                st.caption(f"Riesgo del proceso a fin de cada mes, con lo que se sabía en esa fecha. En 6 meses "
-                           f"{'subió' if d_ > 0 else 'bajó' if d_ < 0 else 'no cambió'}"
-                           f"{f' {abs(d_)} puntos' if d_ else ''}. Sirve para mostrar a la gerencia si las acciones "
-                           f"están cambiando la situación.")
+                    st.markdown("".join(html_j), unsafe_allow_html=True)
+                    if comb is not None:
+                        st.success(f"Si logras las {len(jug)} jugadas, el riesgo pasaría de **{r0['puntos']}** a "
+                                   f"**{comb}** ({riesgos.nivel(comb).lower()}). Hoy una paralización es "
+                                   f"**{anticipar.probabilidad(r0['puntos'])}**; después sería "
+                                   f"**{anticipar.probabilidad(comb)}**.")
+                    faltan_j = jug[~jug["nombre"].isin(AC_r.loc[AC_r["proceso_id"] == pid, "nombre"])]
+                    if not faltan_j.empty and st.button(f"➕ Agregar {len(faltan_j)} jugada(s) al plan de acción",
+                                                        key=f"rg_jug_{pid}"):
+                        nuevas = pd.DataFrame([dict(proceso_id=pid, nombre=j["nombre"], estrategia="Atender sus "
+                                                    "preocupaciones de cerca", accion=j["accion"],
+                                                    responsable=pr["responsable"], fecha=None, estado="Pendiente")
+                                               for _, j in faltan_j.iterrows()])
+                        st.session_state.acciones = riesgos.normalizar_acciones(
+                            pd.concat([st.session_state.acciones, nuevas], ignore_index=True))
+                        st.rerun()
+            with j2:
+                st.markdown("##### 📈 ¿Está funcionando el plan?")
+                tend = anticipar.tendencia(riesgos.evaluar, pr, PA_r, V["actores"], H_r, C_r, V["registro"], hoy, CTX_r)
+                if len(tend) > 1:
+                    st.plotly_chart(anticipar.figura_tendencia(tend), width="stretch", config=cfg("tendencia_riesgo"))
+                    d_ = int(tend["puntos"].iloc[-1] - tend["puntos"].iloc[0])
+                    st.caption(f"Riesgo del proceso a fin de cada mes, con lo que se sabía en esa fecha. En 6 meses "
+                               f"{'subió' if d_ > 0 else 'bajó' if d_ < 0 else 'no cambió'}"
+                               f"{f' {abs(d_)} puntos' if d_ else ''}. Sirve para mostrar a la gerencia si las acciones "
+                               f"están cambiando la situación.")
 
-        # --- quien puede frenar el proceso
-        st.markdown("#### 🚧 Quién puede frenar el proceso y cómo acercarse")
-        p0 = r0["partes"]
-        if p0.empty:
-            st.info("Este proceso aún no tiene actores asignados. Agrégalos en **Editar procesos y actores**.")
-        else:
-            st.plotly_chart(riesgos.figura_actores(p0, alto=480), width="stretch", config=cfg("actores_proceso"))
-            st.markdown("##### A quién atender primero")
-            for v2, (_, a) in zip(st.columns(3), p0[p0["presion"] > 0].head(3).iterrows()):
-                with v2:
-                    pts_ = riesgos.puentes(a["nombre"], A_hoy, R_r)
-                    fondo_html = (f"<span style='color:#5b6675'>De fondo:</span> <i>{a['interes_fondo']}</i><br>"
-                                  if a.get("interes_fondo") else "")
-                    doble_html = (f"<span style='color:#a32424'>⚠️ En privado dice "
-                                  f"{actores.POSTURA_TXT[int(a['postura_privada'])].lower()}, en público "
-                                  f"{actores.POSTURA_TXT[int(a['postura'])].lower()}</span><br>"
-                                  if a.get("doble_discurso") else "")
-                    dist = riesgos.distancia_empresa(a["nombre"], A_hoy, R_r)
-                    st.markdown(f"""
+            # --- quien puede frenar el proceso
+            st.markdown("#### 🚧 Quién puede frenar el proceso y cómo acercarse")
+            p0 = r0["partes"]
+            if p0.empty:
+                st.info("Este proceso aún no tiene actores asignados. Agrégalos en **Editar procesos y actores**.")
+            else:
+                st.plotly_chart(riesgos.figura_actores(p0, alto=480), width="stretch", config=cfg("actores_proceso"))
+                st.markdown("##### A quién atender primero")
+                for v2, (_, a) in zip(st.columns(3), p0[p0["presion"] > 0].head(3).iterrows()):
+                    with v2:
+                        pts_ = riesgos.puentes(a["nombre"], A_hoy, R_r)
+                        fondo_html = (f"<span style='color:#5b6675'>De fondo:</span> <i>{a['interes_fondo']}</i><br>"
+                                      if a.get("interes_fondo") else "")
+                        doble_html = (f"<span style='color:#a32424'>⚠️ En privado dice "
+                                      f"{actores.POSTURA_TXT[int(a['postura_privada'])].lower()}, en público "
+                                      f"{actores.POSTURA_TXT[int(a['postura'])].lower()}</span><br>"
+                                      if a.get("doble_discurso") else "")
+                        dist = riesgos.distancia_empresa(a["nombre"], A_hoy, R_r)
+                        st.markdown(f"""
 <div class="evento" style="border-left:5px solid {actores.POSTURA_COLOR[int(a['postura'])]}">
 <b>{a['nombre']}</b> · {a['rol']} · {actores.POSTURA_TXT[int(a['postura'])]} · influencia {a['influencia']}/5<br>
 <span style="color:#5b6675">Quiere:</span> {a['interes'] or '—'}<br>
@@ -1410,96 +1442,96 @@ with tab_riesgos:
 <span style="color:#5b6675">Quién puede abrir el diálogo:</span> {', '.join(pts_[:3]) or 'sin puentes en el mapa'}
 {f'· a {dist} pasos de la empresa en la red' if dist else ''}
 </div>""", unsafe_allow_html=True)
-            with st.expander("Ver todos los actores del proceso"):
-                st.dataframe(p0[["nombre", "rol", "postura", "influencia", "interes", "preocupacion", "estrategia"]]
-                             .assign(postura=p0["postura"].map(actores.POSTURA_TXT)), hide_index=True,
-                             width="stretch")
+                with st.expander("Ver todos los actores del proceso"):
+                    st.dataframe(p0[["nombre", "rol", "postura", "influencia", "interes", "preocupacion", "estrategia"]]
+                                 .assign(postura=p0["postura"].map(actores.POSTURA_TXT)), hide_index=True,
+                                 width="stretch")
 
-            # --- simulador
-            st.markdown("#### 🔀 ¿Qué pasa si…? Prueba escenarios antes de decidir")
-            es_p = ES_r[ES_r["proceso_id"] == pid]
-            nombres_es = list(dict.fromkeys(es_p["escenario"]))
-            res_es = [(n, riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy,
-                                          dict(zip(g["nombre"], g["postura_nueva"])), contexto=CTX_r)["puntos"])
-                      for n, g in ((n, es_p[es_p["escenario"] == n]) for n in nombres_es)]
-            with st.container():  # escenarios guardados, a todo el ancho
-                if res_es:
-                    st.markdown("##### Riesgo de cada escenario")
-                    st.plotly_chart(riesgos.figura_escenarios(res_es, r0["puntos"],
-                                                              alto=110 + (78 if MOVIL else 58) * len(res_es),
-                                                              ancho_texto=24 if MOVIL else 60),
-                                    width="stretch", config=cfg("escenarios"))
-                else:
-                    st.info("Este proceso aún no tiene escenarios. Arma uno abajo y guárdalo.")
-            with st.container():  # armar escenario, a todo el ancho
-                st.markdown("##### Arma tu escenario")
-                st.caption("Despliega la lista y elige uno o más escenarios guardados; luego ajusta, si quieres, la "
-                           "postura esperada de cada actor en la última columna.")
-                elegidos = st.multiselect("Elige uno o más escenarios guardados", nombres_es, key=f"rg_esc_{pid}",
-                                          default=nombres_es[:1], placeholder="Despliega la lista para elegir")
-                cambios = {}
-                for n in elegidos:
-                    g = es_p[es_p["escenario"] == n]
-                    cambios.update(dict(zip(g["nombre"], g["postura_nueva"])))
-                tabla = p0[["nombre", "rol", "postura_antes"]].copy()
-                tabla["postura_antes"] = tabla["postura_antes"].map(postura_opc)
-                tabla["en_escenario"] = [postura_opc(cambios.get(n, p)) for n, p in
-                                         zip(p0["nombre"], p0["postura_antes"])]
-                ed = st.data_editor(tabla, hide_index=True, width="stretch", key=f"rg_ed_{pid}_{'|'.join(elegidos)}",
-                                    disabled=["nombre", "rol", "postura_antes"], height=38 + 35 * len(tabla),
-                                    column_config={"nombre": st.column_config.TextColumn("Actor", width="large"),
-                                                   "rol": st.column_config.TextColumn("Rol", width="small"),
-                                                   "postura_antes": st.column_config.TextColumn("Postura hoy",
-                                                                                                width="small"),
-                                                   "en_escenario": st.column_config.SelectboxColumn(
-                                                       "✏️ Postura en el escenario", options=POSTURA_OPC,
-                                                       required=True, width="medium")})
-            manual = {n: POSTURA_OPC.index(v) - 2 for n, v in zip(ed["nombre"], ed["en_escenario"])}
-            cambios = {n: v for n, v in manual.items()
-                       if v != int(p0.loc[p0["nombre"] == n, "postura_antes"].iloc[0])}
-            r1 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy, cambios, contexto=CTX_r)
-            o1, o2 = st.columns([0.8, 1.3])
-            with o1:
-                st.markdown(f"##### Resultado: <span style='color:{riesgos.NIVEL_COLOR[r1['nivel']]}'>"
-                            f"{r1['nivel']}</span>", unsafe_allow_html=True)
-                st.plotly_chart(riesgos.figura_medidor(r1["puntos"], antes=r0["puntos"]), width="stretch",
-                                config=cfg("riesgo_escenario"))
-            with o2:
-                if not cambios:
-                    st.info("Cambia la postura esperada de uno o más actores (o elige un escenario guardado) para "
-                            "ver cómo se mueve el riesgo.")
-                else:
-                    elegido = es_p[es_p["escenario"].isin(elegidos)]
-                    motivo = {n: m for n, m in zip(elegido["nombre"], elegido["motivo"]) if m}
-                    filas = [f"- **{n}**: {actores.POSTURA_TXT[int(p0.loc[p0['nombre'] == n, 'postura_antes'].iloc[0])]}"
-                             f" → **{actores.POSTURA_TXT[v]}**" + (f" · _{motivo[n]}_" if n in motivo else "")
-                             for n, v in cambios.items()]
-                    st.markdown("**Qué cambia**\n" + "\n".join(filas))
-                    ten = riesgos.tensiones([n for n, v in cambios.items()
-                                             if v < int(p0.loc[p0["nombre"] == n, "postura_antes"].iloc[0])], R_r)
-                    for _, t in ten.iterrows():
-                        st.warning(f"Se tensiona una relación ya conflictiva: **{t['origen']} ↔ {t['destino']}** "
-                                   f"({t['descripcion']}).")
-                    dif = r1["puntos"] - r0["puntos"]
-                    (st.success if dif < 0 else st.error if dif > 0 else st.info)(
-                        f"El riesgo pasa de **{r0['puntos']}** a **{r1['puntos']}** ({dif:+d} puntos).")
-                    with st.popover("💾 Guardar como escenario"):
-                        nom_e = st.text_input("Nombre del escenario", key=f"rg_nom_{pid}")
-                        if st.button("Guardar", disabled=not nom_e, key=f"rg_guardar_{pid}"):
-                            nuevos = pd.DataFrame([dict(proceso_id=pid, escenario=nom_e, nombre=n, postura_nueva=v,
-                                                        motivo="") for n, v in cambios.items()])
-                            st.session_state.escenarios = riesgos.normalizar_escenarios(
-                                pd.concat([st.session_state.escenarios, nuevos], ignore_index=True))
-                            st.rerun()
+                # --- simulador
+                st.markdown("#### 🔀 ¿Qué pasa si…? Prueba escenarios antes de decidir")
+                es_p = ES_r[ES_r["proceso_id"] == pid]
+                nombres_es = list(dict.fromkeys(es_p["escenario"]))
+                res_es = [(n, riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy,
+                                              dict(zip(g["nombre"], g["postura_nueva"])), contexto=CTX_r)["puntos"])
+                          for n, g in ((n, es_p[es_p["escenario"] == n]) for n in nombres_es)]
+                with st.container():  # escenarios guardados, a todo el ancho
+                    if res_es:
+                        st.markdown("##### Riesgo de cada escenario")
+                        st.plotly_chart(riesgos.figura_escenarios(res_es, r0["puntos"],
+                                                                  alto=110 + (78 if MOVIL else 58) * len(res_es),
+                                                                  ancho_texto=24 if MOVIL else 60),
+                                        width="stretch", config=cfg("escenarios"))
+                    else:
+                        st.info("Este proceso aún no tiene escenarios. Arma uno abajo y guárdalo.")
+                with st.container():  # armar escenario, a todo el ancho
+                    st.markdown("##### Arma tu escenario")
+                    st.caption("Despliega la lista y elige uno o más escenarios guardados; luego ajusta, si quieres, la "
+                               "postura esperada de cada actor en la última columna.")
+                    elegidos = st.multiselect("Elige uno o más escenarios guardados", nombres_es, key=f"rg_esc_{pid}",
+                                              default=nombres_es[:1], placeholder="Despliega la lista para elegir")
+                    cambios = {}
+                    for n in elegidos:
+                        g = es_p[es_p["escenario"] == n]
+                        cambios.update(dict(zip(g["nombre"], g["postura_nueva"])))
+                    tabla = p0[["nombre", "rol", "postura_antes"]].copy()
+                    tabla["postura_antes"] = tabla["postura_antes"].map(postura_opc)
+                    tabla["en_escenario"] = [postura_opc(cambios.get(n, p)) for n, p in
+                                             zip(p0["nombre"], p0["postura_antes"])]
+                    ed = st.data_editor(tabla, hide_index=True, width="stretch", key=f"rg_ed_{pid}_{'|'.join(elegidos)}",
+                                        disabled=["nombre", "rol", "postura_antes"], height=38 + 35 * len(tabla),
+                                        column_config={"nombre": st.column_config.TextColumn("Actor", width="large"),
+                                                       "rol": st.column_config.TextColumn("Rol", width="small"),
+                                                       "postura_antes": st.column_config.TextColumn("Postura hoy",
+                                                                                                    width="small"),
+                                                       "en_escenario": st.column_config.SelectboxColumn(
+                                                           "✏️ Postura en el escenario", options=POSTURA_OPC,
+                                                           required=True, width="medium")})
+                manual = {n: POSTURA_OPC.index(v) - 2 for n, v in zip(ed["nombre"], ed["en_escenario"])}
+                cambios = {n: v for n, v in manual.items()
+                           if v != int(p0.loc[p0["nombre"] == n, "postura_antes"].iloc[0])}
+                r1 = riesgos.evaluar(pr, PA_r, A_hoy, H_r, C_r, base_df, hoy, cambios, contexto=CTX_r)
+                o1, o2 = st.columns([0.8, 1.3])
+                with o1:
+                    st.markdown(f"##### Resultado: <span style='color:{riesgos.NIVEL_COLOR[r1['nivel']]}'>"
+                                f"{r1['nivel']}</span>", unsafe_allow_html=True)
+                    st.plotly_chart(riesgos.figura_medidor(r1["puntos"], antes=r0["puntos"]), width="stretch",
+                                    config=cfg("riesgo_escenario"))
+                with o2:
+                    if not cambios:
+                        st.info("Cambia la postura esperada de uno o más actores (o elige un escenario guardado) para "
+                                "ver cómo se mueve el riesgo.")
+                    else:
+                        elegido = es_p[es_p["escenario"].isin(elegidos)]
+                        motivo = {n: m for n, m in zip(elegido["nombre"], elegido["motivo"]) if m}
+                        filas = [f"- **{n}**: {actores.POSTURA_TXT[int(p0.loc[p0['nombre'] == n, 'postura_antes'].iloc[0])]}"
+                                 f" → **{actores.POSTURA_TXT[v]}**" + (f" · _{motivo[n]}_" if n in motivo else "")
+                                 for n, v in cambios.items()]
+                        st.markdown("**Qué cambia**\n" + "\n".join(filas))
+                        ten = riesgos.tensiones([n for n, v in cambios.items()
+                                                 if v < int(p0.loc[p0["nombre"] == n, "postura_antes"].iloc[0])], R_r)
+                        for _, t in ten.iterrows():
+                            st.warning(f"Se tensiona una relación ya conflictiva: **{t['origen']} ↔ {t['destino']}** "
+                                       f"({t['descripcion']}).")
+                        dif = r1["puntos"] - r0["puntos"]
+                        (st.success if dif < 0 else st.error if dif > 0 else st.info)(
+                            f"El riesgo pasa de **{r0['puntos']}** a **{r1['puntos']}** ({dif:+d} puntos).")
+                        with st.popover("💾 Guardar como escenario"):
+                            nom_e = st.text_input("Nombre del escenario", key=f"rg_nom_{pid}")
+                            if st.button("Guardar", disabled=not nom_e, key=f"rg_guardar_{pid}"):
+                                nuevos = pd.DataFrame([dict(proceso_id=pid, escenario=nom_e, nombre=n, postura_nueva=v,
+                                                            motivo="") for n, v in cambios.items()])
+                                st.session_state.escenarios = riesgos.normalizar_escenarios(
+                                    pd.concat([st.session_state.escenarios, nuevos], ignore_index=True))
+                                st.rerun()
 
-            # --- plan de accion
-            st.markdown("#### 📋 Plan de acción por actor")
-            ac_p = AC_r[AC_r["proceso_id"] == pid]
-            hechas = int((ac_p["estado"] == "Hecha").sum())
-            sin_plan = p0[(p0["presion"] > 0) & ~p0["nombre"].isin(ac_p["nombre"])]
-            atrasadas = ac_p[(ac_p["estado"] != "Hecha") & ac_p["fecha"].notna() & (ac_p["fecha"] < hoy)]
-            avance = hechas / len(ac_p) if len(ac_p) else 0
-            st.markdown(f"""
+                # --- plan de accion
+                st.markdown("#### 📋 Plan de acción por actor")
+                ac_p = AC_r[AC_r["proceso_id"] == pid]
+                hechas = int((ac_p["estado"] == "Hecha").sum())
+                sin_plan = p0[(p0["presion"] > 0) & ~p0["nombre"].isin(ac_p["nombre"])]
+                atrasadas = ac_p[(ac_p["estado"] != "Hecha") & ac_p["fecha"].notna() & (ac_p["fecha"] < hoy)]
+                avance = hechas / len(ac_p) if len(ac_p) else 0
+                st.markdown(f"""
 <div class="evento" style="padding:12px 16px">
   <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:baseline">
     <div><span style="font-size:26px;font-weight:700">{hechas}/{len(ac_p)}</span>
@@ -1512,166 +1544,167 @@ with tab_riesgos:
   <div style="height:8px;border-radius:4px;background:rgba(31,42,55,0.08);margin-top:8px">
     <div style="height:8px;border-radius:4px;width:{avance:.0%};background:#1baf7a"></div></div>
 </div>""", unsafe_allow_html=True)
-            if len(sin_plan):
-                st.warning("**Sin acción asignada:** " + ", ".join(
-                    f"{n} ({actores.POSTURA_TXT[int(v)].lower()})" for n, v in zip(sin_plan["nombre"], sin_plan["postura"]))
-                    + ". Abre *Editar el plan* y usa **✨ Sugerir acciones** para proponer una por actor.")
-            post_de = dict(zip(p0["nombre"], p0["postura"]))
-            COL_EST = {"Pendiente": ("⏳ Pendientes", "#5b6675"), "En curso": ("🔄 En curso", "#eda100"),
-                       "Hecha": ("✅ Hechas", "#1baf7a")}
-            for col_k, est in zip(st.columns(3), riesgos.ESTADOS_ACCION):
-                titulo_k, color_k = COL_EST[est]
-                grupo = ac_p[ac_p["estado"] == est].sort_values("fecha", na_position="last")
-                col_k.markdown(f"<div style='font-weight:700;color:{color_k};border-bottom:3px solid {color_k};"
-                               f"padding-bottom:4px;margin-bottom:8px'>{titulo_k} ({len(grupo)})</div>",
-                               unsafe_allow_html=True)
-                tarjetas = []
-                for _, a in grupo.iterrows():
-                    tarde = est != "Hecha" and pd.notna(a["fecha"]) and a["fecha"] < hoy
-                    fecha_t = (f"{a['fecha']:%d/%m/%Y}" if pd.notna(a["fecha"]) else "sin fecha")
-                    fecha_t = (f"<b style='color:#d03b3b'>⚠️ {fecha_t} (atrasada)</b>" if tarde else
-                               f"📅 {fecha_t}" + (f" · en {(a['fecha'] - hoy).days} días"
-                                                 if pd.notna(a["fecha"]) and est != "Hecha" else ""))
-                    color_a = actores.POSTURA_COLOR.get(int(post_de.get(a["nombre"], 0)), "#a3a3a0")
-                    tarjetas.append(f"""
+                if len(sin_plan):
+                    st.warning("**Sin acción asignada:** " + ", ".join(
+                        f"{n} ({actores.POSTURA_TXT[int(v)].lower()})" for n, v in zip(sin_plan["nombre"], sin_plan["postura"]))
+                        + ". Abre *Editar el plan* y usa **✨ Sugerir acciones** para proponer una por actor.")
+                post_de = dict(zip(p0["nombre"], p0["postura"]))
+                COL_EST = {"Pendiente": ("⏳ Pendientes", "#5b6675"), "En curso": ("🔄 En curso", "#eda100"),
+                           "Hecha": ("✅ Hechas", "#1baf7a")}
+                for col_k, est in zip(st.columns(3), riesgos.ESTADOS_ACCION):
+                    titulo_k, color_k = COL_EST[est]
+                    grupo = ac_p[ac_p["estado"] == est].sort_values("fecha", na_position="last")
+                    col_k.markdown(f"<div style='font-weight:700;color:{color_k};border-bottom:3px solid {color_k};"
+                                   f"padding-bottom:4px;margin-bottom:8px'>{titulo_k} ({len(grupo)})</div>",
+                                   unsafe_allow_html=True)
+                    tarjetas = []
+                    for _, a in grupo.iterrows():
+                        tarde = est != "Hecha" and pd.notna(a["fecha"]) and a["fecha"] < hoy
+                        fecha_t = (f"{a['fecha']:%d/%m/%Y}" if pd.notna(a["fecha"]) else "sin fecha")
+                        fecha_t = (f"<b style='color:#d03b3b'>⚠️ {fecha_t} (atrasada)</b>" if tarde else
+                                   f"📅 {fecha_t}" + (f" · en {(a['fecha'] - hoy).days} días"
+                                                     if pd.notna(a["fecha"]) and est != "Hecha" else ""))
+                        color_a = actores.POSTURA_COLOR.get(int(post_de.get(a["nombre"], 0)), "#a3a3a0")
+                        tarjetas.append(f"""
 <div class="evento" style="border-left:5px solid {color_a};padding:10px 12px;{'opacity:0.75;' if est == 'Hecha' else ''}">
   <div style="font-weight:700">{a['nombre'] or 'Sin actor'}</div>
   <div style="margin:3px 0 6px 0">{a['accion']}</div>
   <span class="badge" style="background:rgba(45,74,51,0.1);color:#2d4a33">{a['estrategia'] or '—'}</span>
   <div style="font-size:12.5px;color:#5b6675;margin-top:6px">👤 {a['responsable'] or '—'} · {fecha_t}</div>
 </div>""")
-                col_k.markdown("".join(tarjetas) or "<div style='color:#5b6675;font-size:13px'>Ninguna</div>",
-                               unsafe_allow_html=True)
-            st.caption("Color del borde = postura del actor hacia la empresa.")
-            with st.expander("✏️ Editar el plan (agregar, cambiar estado o fecha)"):
-                ac_ed = st.data_editor(ac_p.drop(columns=["proceso_id"]).reset_index(drop=True), num_rows="dynamic", hide_index=True,
-                                       width="stretch", key=f"rg_acc_{pid}_{len(ac_p)}",
-                                       column_config={
-                                           "nombre": st.column_config.SelectboxColumn("Actor", options=list(p0["nombre"])),
-                                           "estrategia": st.column_config.SelectboxColumn("Estrategia",
-                                                                                          options=riesgos.ESTRATEGIAS),
-                                           "accion": st.column_config.TextColumn("Acción", width="large"),
-                                           "responsable": "Responsable",
-                                           "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-                                           "estado": st.column_config.SelectboxColumn("Estado",
-                                                                                      options=riesgos.ESTADOS_ACCION)})
-                b1, b2, b3 = st.columns(3)
-                if b1.button("💾 Guardar el plan", type="primary", key=f"rg_acc_guardar_{pid}"):
-                    todas = st.session_state.acciones
-                    st.session_state.acciones = riesgos.normalizar_acciones(pd.concat(
-                        [todas[todas["proceso_id"] != pid], ac_ed.assign(proceso_id=pid)], ignore_index=True))
-                    st.toast("✅ Plan de acción guardado.")
-                    st.rerun()
-                if b2.button("✨ Sugerir acciones para quienes no tienen", disabled=sin_plan.empty and
-                             p0[~p0["nombre"].isin(ac_p["nombre"])].empty, key=f"rg_sug_{pid}"):
-                    sug = riesgos.sugerir_acciones(pid, p0, AC_r, pr["responsable"])
-                    st.session_state.acciones = riesgos.normalizar_acciones(
-                        pd.concat([st.session_state.acciones, sug], ignore_index=True))
-                    st.rerun()
-                b3.download_button("⬇️ Plan de acción (CSV)", AC_r.to_csv(index=False).encode("utf-8"),
-                                   "plan_de_accion.csv", "text/csv", key="rg_acc_csv")
+                    col_k.markdown("".join(tarjetas) or "<div style='color:#5b6675;font-size:13px'>Ninguna</div>",
+                                   unsafe_allow_html=True)
+                st.caption("Color del borde = postura del actor hacia la empresa.")
+                with st.expander("✏️ Editar el plan (agregar, cambiar estado o fecha)"):
+                    ac_ed = st.data_editor(ac_p.drop(columns=["proceso_id"]).reset_index(drop=True), num_rows="dynamic", hide_index=True,
+                                           width="stretch", key=f"rg_acc_{pid}_{len(ac_p)}",
+                                           column_config={
+                                               "nombre": st.column_config.SelectboxColumn("Actor", options=list(p0["nombre"])),
+                                               "estrategia": st.column_config.SelectboxColumn("Estrategia",
+                                                                                              options=riesgos.ESTRATEGIAS),
+                                               "accion": st.column_config.TextColumn("Acción", width="large"),
+                                               "responsable": "Responsable",
+                                               "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                                               "estado": st.column_config.SelectboxColumn("Estado",
+                                                                                          options=riesgos.ESTADOS_ACCION)})
+                    b1, b2, b3 = st.columns(3)
+                    if b1.button("💾 Guardar el plan", type="primary", key=f"rg_acc_guardar_{pid}"):
+                        todas = st.session_state.acciones
+                        st.session_state.acciones = riesgos.normalizar_acciones(pd.concat(
+                            [todas[todas["proceso_id"] != pid], ac_ed.assign(proceso_id=pid)], ignore_index=True))
+                        st.toast("✅ Plan de acción guardado.")
+                        st.rerun()
+                    if b2.button("✨ Sugerir acciones para quienes no tienen", disabled=sin_plan.empty and
+                                 p0[~p0["nombre"].isin(ac_p["nombre"])].empty, key=f"rg_sug_{pid}"):
+                        sug = riesgos.sugerir_acciones(pid, p0, AC_r, pr["responsable"])
+                        st.session_state.acciones = riesgos.normalizar_acciones(
+                            pd.concat([st.session_state.acciones, sug], ignore_index=True))
+                        st.rerun()
+                    b3.download_button("⬇️ Plan de acción (CSV)", AC_r.to_csv(index=False).encode("utf-8"),
+                                       "plan_de_accion.csv", "text/csv", key="rg_acc_csv")
 
-            with st.popover("📥 Bajar el análisis de este proceso para una presentación", width="stretch"):
-                st.markdown("**4 láminas en 4K (3840 × 2160)**: riesgo del proceso y por qué, quién puede frenarlo, "
-                            "escenarios y plan de acción.")
-                clave_r = (PROY, pid, hoy, cliente, len(PA_r), len(CTX_r) if CTX_r is not None else 0, len(ES_r), len(AC_r), int(A_hoy["postura"].sum()),
-                           r0["puntos"])
-                if st.button("Preparar láminas", type="primary", key="btn_lam_rg"):
-                    with st.spinner("Dibujando las láminas en alta resolución…"):
-                        st.session_state.laminas_rg = (clave_r, laminas_riesgo_cache(
-                            pr, PA_r, A_hoy, R_r, H_r, C_r, base_df, ES_r, AC_r, hoy, cliente_lam, CTX_r))
-                lr = st.session_state.get("laminas_rg")
-                if lr and lr[0] == clave_r:
-                    q1, q2 = st.columns(2)
-                    q1.download_button("⬇️ PowerPoint (.pptx)", lr[1][0], width="stretch", key="dl_rg_pptx",
-                                       file_name=f"confluentia_riesgo_{pid}_{hoy:%Y%m%d}.pptx",
-                                       mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
-                    q2.download_button("⬇️ Imágenes PNG (.zip)", lr[1][1], width="stretch", key="dl_rg_zip",
-                                       file_name=f"confluentia_riesgo_{pid}_{hoy:%Y%m%d}.zip", mime="application/zip")
+                with st.popover("📥 Bajar el análisis de este proceso para una presentación", width="stretch"):
+                    st.markdown("**4 láminas en 4K (3840 × 2160)**: riesgo del proceso y por qué, quién puede frenarlo, "
+                                "escenarios y plan de acción.")
+                    clave_r = (PROY, pid, hoy, cliente, len(PA_r), len(CTX_r) if CTX_r is not None else 0, len(ES_r), len(AC_r), int(A_hoy["postura"].sum()),
+                               r0["puntos"])
+                    if st.button("Preparar láminas", type="primary", key="btn_lam_rg"):
+                        with st.spinner("Dibujando las láminas en alta resolución…"):
+                            st.session_state.laminas_rg = (clave_r, laminas_riesgo_cache(
+                                pr, PA_r, A_hoy, R_r, H_r, C_r, base_df, ES_r, AC_r, hoy, cliente_lam, CTX_r))
+                    lr = st.session_state.get("laminas_rg")
+                    if lr and lr[0] == clave_r:
+                        q1, q2 = st.columns(2)
+                        q1.download_button("⬇️ PowerPoint (.pptx)", lr[1][0], width="stretch", key="dl_rg_pptx",
+                                           file_name=f"confluentia_riesgo_{pid}_{hoy:%Y%m%d}.pptx",
+                                           mime="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+                        q2.download_button("⬇️ Imágenes PNG (.zip)", lr[1][1], width="stretch", key="dl_rg_zip",
+                                           file_name=f"confluentia_riesgo_{pid}_{hoy:%Y%m%d}.zip", mime="application/zip")
 
-    with st.expander("🌩️ Detonantes y contexto: denuncias, cambio de directiva, normas, seguridad"):
-        st.caption("Hechos que no son una protesta pero frenan el diálogo: una denuncia ambiental, comercial o "
-                   "policial contra un comunero, la elección de una nueva directiva, una norma en debate o un riesgo "
-                   "de seguridad para el personal. Una denuncia pesa 3 meses; un cambio de directiva, desde 5 meses "
-                   "antes. Deja la comunidad vacía si afecta a todo el proyecto. Puedes pegar el **enlace de la noticia** "
-                   "local o regional. Solo los hechos **validados** por el equipo suben el riesgo: lo que llega por "
-                   "rumor o por una sola fuente queda *por validar* hasta confirmarlo.")
-        CTX_v = V.get("contexto")
-        CTX_v = CTX_v if CTX_v is not None else anticipar.normalizar_contexto(pd.DataFrame())
-        n_pv = anticipar.por_validar(CTX_v)
-        if n_pv:
-            st.warning(f"{n_pv} hecho{'s' * (n_pv != 1)} por validar: no cuenta{'n' * (n_pv != 1)} en el riesgo "
-                       "hasta que alguien del equipo lo confirme.")
-        CTX_ed = st.data_editor(CTX_v.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch",
-                                key="ed_contexto", column_config={
-                                    "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
-                                    "proyecto": st.column_config.SelectboxColumn("Proyecto", options=PROYECTOS),
-                                    "comunidad": st.column_config.SelectboxColumn(
-                                        "Comunidad", options=[""] + list(COMUNIDADES["comunidad"])),
-                                    "tipo": st.column_config.SelectboxColumn("Tipo",
-                                                                             options=list(anticipar.TIPOS_CONTEXTO)),
-                                    "descripcion": st.column_config.TextColumn("Qué pasó", width="large"),
-                                    "intensidad": st.column_config.NumberColumn("Intensidad (1-3)", min_value=1,
-                                                                                max_value=3),
-                                    "fuente": st.column_config.TextColumn("Fuente"),
-                                    "enlace": st.column_config.LinkColumn("Enlace (noticia)", display_text="Abrir"),
-                                    "validado": st.column_config.CheckboxColumn("Validado", default=False)})
-        if st.button("Guardar detonantes y contexto", key="g_contexto"):
-            st.session_state.contexto = anticipar.normalizar_contexto(
-                portafolio.reemplazar(st.session_state.contexto, CTX_v, CTX_ed), st.session_state.comunidades)
-            st.rerun()
+        with st.expander("🌩️ Detonantes y contexto: denuncias, cambio de directiva, normas, seguridad"):
+            st.caption("Hechos que no son una protesta pero frenan el diálogo: una denuncia ambiental, comercial o "
+                       "policial contra un comunero, la elección de una nueva directiva, una norma en debate o un riesgo "
+                       "de seguridad para el personal. Una denuncia pesa 3 meses; un cambio de directiva, desde 5 meses "
+                       "antes. Deja la comunidad vacía si afecta a todo el proyecto. Puedes pegar el **enlace de la noticia** "
+                       "local o regional. Solo los hechos **validados** por el equipo suben el riesgo: lo que llega por "
+                       "rumor o por una sola fuente queda *por validar* hasta confirmarlo.")
+            CTX_v = V.get("contexto")
+            CTX_v = CTX_v if CTX_v is not None else anticipar.normalizar_contexto(pd.DataFrame())
+            n_pv = anticipar.por_validar(CTX_v)
+            if n_pv:
+                st.warning(f"{n_pv} hecho{'s' * (n_pv != 1)} por validar: no cuenta{'n' * (n_pv != 1)} en el riesgo "
+                           "hasta que alguien del equipo lo confirme.")
+            CTX_ed = st.data_editor(CTX_v.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch",
+                                    key="ed_contexto", column_config={
+                                        "fecha": st.column_config.DateColumn("Fecha", format="DD/MM/YYYY"),
+                                        "proyecto": st.column_config.SelectboxColumn("Proyecto", options=PROYECTOS),
+                                        "comunidad": st.column_config.SelectboxColumn(
+                                            "Comunidad", options=[""] + list(COMUNIDADES["comunidad"])),
+                                        "tipo": st.column_config.SelectboxColumn("Tipo",
+                                                                                 options=list(anticipar.TIPOS_CONTEXTO)),
+                                        "descripcion": st.column_config.TextColumn("Qué pasó", width="large"),
+                                        "intensidad": st.column_config.NumberColumn("Intensidad (1-3)", min_value=1,
+                                                                                    max_value=3),
+                                        "fuente": st.column_config.TextColumn("Fuente"),
+                                        "enlace": st.column_config.LinkColumn("Enlace (noticia)", display_text="Abrir"),
+                                        "validado": st.column_config.CheckboxColumn("Validado", default=False)})
+            if st.button("Guardar detonantes y contexto", key="g_contexto"):
+                st.session_state.contexto = anticipar.normalizar_contexto(
+                    portafolio.reemplazar(st.session_state.contexto, CTX_v, CTX_ed), st.session_state.comunidades)
+                st.rerun()
 
-    with st.expander("📝 Editar procesos y actores de cada proceso"):
-        st.markdown("**Procesos**")
-        P_ed = st.data_editor(P_r.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_procesos",
-                              column_config={"fecha_limite": st.column_config.DateColumn(format="DD/MM/YYYY"),
-                                             "impacto": st.column_config.NumberColumn(min_value=1, max_value=5),
-                                             "comunidad": st.column_config.SelectboxColumn(
-                                                 options=list(COMUNIDADES["comunidad"]))})
-        st.markdown("**Actores de cada proceso** (el nombre debe coincidir con el mapa de actores)")
-        PA_ed = st.data_editor(PA_r.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_partes",
-                               column_config={"rol": st.column_config.SelectboxColumn(options=riesgos.ROLES),
-                                              "nombre": st.column_config.SelectboxColumn(
-                                                  options=sorted(st.session_state.actores["nombre"]))})
-        f1, f2, f3 = st.columns(3)
-        if f1.button("Guardar procesos y actores", type="primary"):
-            st.session_state.procesos = riesgos.normalizar_procesos(
-                portafolio.reemplazar(st.session_state.procesos, P_r, P_ed))
-            st.session_state.partes = riesgos.normalizar_partes(
-                portafolio.reemplazar(st.session_state.partes, PA_r, PA_ed))
-            st.rerun()
-        f2.download_button("⬇️ Procesos (CSV)", P_r.to_csv(index=False).encode("utf-8"), "procesos.csv", "text/csv")
-        f3.download_button("⬇️ Actores por proceso (CSV)", PA_r.to_csv(index=False).encode("utf-8"),
-                           "proceso_actores.csv", "text/csv")
-        st.caption("Roles: **Decide** (aprueba o firma), **Puede vetar** (puede frenar el proceso), **Influye** "
-                   "(mueve opinión) y **Afectado**. La postura y la influencia se toman del mapa de actores, así que "
-                   "cada reunión nueva actualiza el riesgo.")
+        with st.expander("📝 Editar procesos y actores de cada proceso"):
+            st.markdown("**Procesos**")
+            P_ed = st.data_editor(P_r.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_procesos",
+                                  column_config={"fecha_limite": st.column_config.DateColumn(format="DD/MM/YYYY"),
+                                                 "impacto": st.column_config.NumberColumn(min_value=1, max_value=5),
+                                                 "comunidad": st.column_config.SelectboxColumn(
+                                                     options=list(COMUNIDADES["comunidad"]))})
+            st.markdown("**Actores de cada proceso** (el nombre debe coincidir con el mapa de actores)")
+            PA_ed = st.data_editor(PA_r.reset_index(drop=True), num_rows="dynamic", hide_index=True, width="stretch", key="ed_partes",
+                                   column_config={"rol": st.column_config.SelectboxColumn(options=riesgos.ROLES),
+                                                  "nombre": st.column_config.SelectboxColumn(
+                                                      options=sorted(st.session_state.actores["nombre"]))})
+            f1, f2, f3 = st.columns(3)
+            if f1.button("Guardar procesos y actores", type="primary"):
+                st.session_state.procesos = riesgos.normalizar_procesos(
+                    portafolio.reemplazar(st.session_state.procesos, P_r, P_ed))
+                st.session_state.partes = riesgos.normalizar_partes(
+                    portafolio.reemplazar(st.session_state.partes, PA_r, PA_ed))
+                st.rerun()
+            f2.download_button("⬇️ Procesos (CSV)", P_r.to_csv(index=False).encode("utf-8"), "procesos.csv", "text/csv")
+            f3.download_button("⬇️ Actores por proceso (CSV)", PA_r.to_csv(index=False).encode("utf-8"),
+                               "proceso_actores.csv", "text/csv")
+            st.caption("Roles: **Decide** (aprueba o firma), **Puede vetar** (puede frenar el proceso), **Influye** "
+                       "(mueve opinión) y **Afectado**. La postura y la influencia se toman del mapa de actores, así que "
+                       "cada reunión nueva actualiza el riesgo.")
 
 # ---------------------------------------------------------------- 3. registro
-with tab_registro:
-    df = base_df
-    st.markdown("Marca **Cumplido** cuando haya evidencia (acta de entrega, fotos, informe).")
-    editado = st.data_editor(
-        df.drop(columns=["estado", "dias_restantes"]),
-        hide_index=True, width="stretch", key="editor_registro",
-        disabled=["id", "fuente"],
-        column_config={
-            "cumplido": st.column_config.CheckboxColumn("Cumplido"),
-            "fecha_limite": st.column_config.DateColumn("Plazo", format="DD/MM/YYYY"),
-            "fecha_reunion": st.column_config.DateColumn("Reunión", format="DD/MM/YYYY"),
-            "fecha_cumplimiento": st.column_config.DateColumn("Cumplido el", format="DD/MM/YYYY"),
-            "descripcion": st.column_config.TextColumn("Compromiso", width="large"),
-        },
-    )
-    if st.button("Guardar cambios"):
-        st.session_state.registro = registro.normalizar(
-            portafolio.reemplazar(st.session_state.registro, V["registro"], editado))
-        st.rerun()
+if "compromisos" in MODS:
+    with tab_registro:
+        df = base_df
+        st.markdown("Marca **Cumplido** cuando haya evidencia (acta de entrega, fotos, informe).")
+        editado = st.data_editor(
+            df.drop(columns=["estado", "dias_restantes"]),
+            hide_index=True, width="stretch", key="editor_registro",
+            disabled=["id", "fuente"],
+            column_config={
+                "cumplido": st.column_config.CheckboxColumn("Cumplido"),
+                "fecha_limite": st.column_config.DateColumn("Plazo", format="DD/MM/YYYY"),
+                "fecha_reunion": st.column_config.DateColumn("Reunión", format="DD/MM/YYYY"),
+                "fecha_cumplimiento": st.column_config.DateColumn("Cumplido el", format="DD/MM/YYYY"),
+                "descripcion": st.column_config.TextColumn("Compromiso", width="large"),
+            },
+        )
+        if st.button("Guardar cambios"):
+            st.session_state.registro = registro.normalizar(
+                portafolio.reemplazar(st.session_state.registro, V["registro"], editado))
+            st.rerun()
 
-    csv = base_df.to_csv(index=False).encode("utf-8")
-    xlsx = io.BytesIO()
-    base_df.to_excel(xlsx, index=False)
-    d1, d2 = st.columns(2)
-    d1.download_button("⬇️ Descargar CSV", csv, "registro_compromisos.csv", "text/csv")
-    d2.download_button("⬇️ Descargar Excel", xlsx.getvalue(), "registro_compromisos.xlsx")
-    st.caption("En esta versión el registro vive en tu sesión: descárgalo para no perderlo.")
+        csv = base_df.to_csv(index=False).encode("utf-8")
+        xlsx = io.BytesIO()
+        base_df.to_excel(xlsx, index=False)
+        d1, d2 = st.columns(2)
+        d1.download_button("⬇️ Descargar CSV", csv, "registro_compromisos.csv", "text/csv")
+        d2.download_button("⬇️ Descargar Excel", xlsx.getvalue(), "registro_compromisos.xlsx")
+        st.caption("En esta versión el registro vive en tu sesión: descárgalo para no perderlo.")
