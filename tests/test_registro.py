@@ -336,12 +336,21 @@ def test_vencidos_por_prioridad_y_validacion():
     from compromisos import anticipar, gerencia
     hoy = date(2026, 11, 7)
     df = registro.con_estado(registro.cargar(EJEMPLO / "registro_demo.csv"), hoy)
-    pr = gerencia.priorizar(df, hoy)
+    from compromisos import actores as ac, conflictos as cf
+    A = ac.al_corte(ac.normalizar_actores(pd.read_csv(EJEMPLO / "actores_demo.csv")),
+                    ac.normalizar_historial(pd.read_csv(EJEMPLO / "posturas_demo.csv")), hoy)
+    poder = gerencia.poder_comunidades(A, cf.normalizar(pd.read_csv(EJEMPLO / "conflictos_demo.csv")), hoy)
+    assert poder.iloc[0]["comunidad"] == "C.C. Pucará Alto" and poder.iloc[0]["nivel_poder"] == "alto"
+    pr = gerencia.priorizar(df, hoy, poder)
     assert len(pr) == (df["estado"] == "Vencido").sum() and set(pr["prioridad"]) <= {1, 2, 3}
     assert list(pr["prioridad"]) == sorted(pr["prioridad"])  # la prioridad 1 primero
-    assert gerencia.prioridad("alto", 10) == 1 and gerencia.prioridad("bajo", 10) == 3
-    assert gerencia.prioridad("bajo", 120) == 2 and gerencia.prioridad("medio", 400) == 2  # P1 solo lo critico
+    # el mismo vencido pesa distinto segun el poder de la comunidad para paralizar
+    assert gerencia.prioridad("alto", 10, poder=1) == 1 and gerencia.prioridad("alto", 10, poder=0) == 2
+    assert gerencia.prioridad("medio", 10, poder=1) == 1 and gerencia.prioridad("bajo", 10, poder=0) == 3
+    alto_pucara = pr[pr["comunidad"] == "C.C. Pucará Alto"]["prioridad"].min()
+    assert alto_pucara == 1 and pr[pr["comunidad"] == "C.C. Qollpa Ccasa"]["prioridad"].min() >= 2
     p1 = pr[pr["prioridad"] == 1].iloc[0]
+    assert "opositor" in p1["motivo_poder"]
     assert p1["atender_antes"] == hoy + __import__("datetime").timedelta(days=7)
     assert "P1" in gerencia.tabla_html(pr) and gerencia.figura_vencidos(pr, hoy).data
     # lo que no esta validado no sube el riesgo

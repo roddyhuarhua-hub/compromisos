@@ -755,7 +755,11 @@ with tab_tablero:
         c3, c4 = st.columns([1.2, 1])
         with c3:
             st.markdown("#### 🔔 Vencidos: atender primero")
-            pr_v = gerencia.priorizar(df, hoy)
+            # la prioridad no es solo el atraso: pesa el poder de la comunidad para paralizar (sus dirigentes
+            # opositores con influencia y su historia de paros)
+            poder_c = gerencia.poder_comunidades(actores.al_corte(V["actores"], V["posturas"], hoy),
+                                                 V["conflictos"], hoy)
+            pr_v = gerencia.priorizar(df, hoy, poder_c)
             n_pv = int((df["estado"] == "Por vencer").sum())
             leyenda = " ".join(f'<span class="badge" style="--c:{gerencia.PRIORIDAD_COLOR[p_]}">P{p_} · '
                                f'{(pr_v["prioridad"] == p_).sum()}</span>' for p_ in (1, 2, 3))
@@ -767,6 +771,8 @@ with tab_tablero:
                     f'<div class="alerta" style="--c:{col}"><div class="t">P{r["prioridad"]} · {r["descripcion"]}</div>'
                     f'<div class="m">{r["comunidad"]} · {r["responsable"]} ({r["responsable_detalle"] or "-"}) · '
                     f'{r["dias_atraso"]} días de atraso · riesgo {r["riesgo_conflicto"]}</div>'
+                    f'<div class="m">🏛️ Poder de la comunidad <b>{gerencia.nivel_poder(r["poder"])}</b>: '
+                    f'{r["motivo_poder"]}</div>'
                     f'<div class="m" style="color:{col}"><b>Atender antes del {r["atender_antes"]:%d/%m}</b> '
                     f'({gerencia.PLAZO_DIAS[r["prioridad"]]} días)</div>'
                     + (f'<div class="m">⏳ Espera de la otra parte: {r["depende_de"]}</div>' if r["depende_de"] else "")
@@ -790,8 +796,11 @@ with tab_tablero:
             with v2:
                 st.markdown("##### Vencidos por comunidad y prioridad")
                 st.markdown(gerencia.tabla_html(pr_v), unsafe_allow_html=True)
-                st.caption("P1: riesgo alto, puede parar el proyecto (atender en 7 días). P2: riesgo medio (15 "
-                           "días). P3: riesgo bajo (30 días); sube a P2 si lleva más de 3 meses vencido.")
+                st.caption("La prioridad no depende solo del atraso. Suma el tema del compromiso (agua, tierras, "
+                           "salud y empleo son riesgo alto) y el **poder de la comunidad para paralizar**: sus "
+                           "dirigentes opositores con influencia y sus paros de los últimos 5 años. Un mismo vencido "
+                           "es P1 donde hay dirigentes que ya paralizaron y P2 o P3 donde nunca hubo paro. "
+                           "Plazos: P1 7 días, P2 15, P3 30.")
 
         # --- calendario
         st.plotly_chart(visual.calendario(df, hoy), width="stretch", config=cfg("calendario_vencimientos"))
