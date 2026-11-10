@@ -10,7 +10,7 @@
 
 ## 1. One-liner
 
-**Hacemos el seguimiento de los compromisos sociales para los equipos de relaciones comunitarias de minería, hidrocarburos y energía, mediante IA que transcribe cada reunión con la comunidad y convierte lo prometido en un registro con plazos y alertas.**
+**Ayudamos a los equipos de relaciones comunitarias de minería, hidrocarburos y energía a anticipar el conflicto social, mediante IA que convierte cada reunión con la comunidad en compromisos con plazo, un mapa de grupos de interés y un riesgo de paralización con la ruta para bajarlo.**
 
 ## 2. Founder
 
@@ -90,25 +90,34 @@ He estado en las mesas donde se firman los compromisos y he visto qué pasa desp
 
 - **Capturas:**
 
-  | Gestión de compromisos | Registro de campo | Registro |
-  |---|---|---|
-  | ![](img/02_tablero.png) | ![](img/01_nueva_reunion.png) | ![](img/03_registro.png) |
+  | Vista corporativa | Registro de campo: interlocutores y compromisos |
+  |---|---|
+  | ![](img/01_vista_corporativa.jpg) | ![](img/02_registro_de_campo.jpg) |
+  | **Vencidos por prioridad (poder de la comunidad)** | **Ruta para bajar el riesgo** |
+  | ![](img/03_vencidos_prioridad.jpg) | ![](img/04_ruta_riesgo.jpg) |
 
 - **Arquitectura:**
 
   ```mermaid
   flowchart LR
-      A[🎙️ Audio de la reunión] -->|Whisper large v3 turbo| T[Transcripción]
-      F[📄 Foto del acta] -->|Llama 4 Scout visión| T
+      A[🎙️ Audio] -->|Whisper / Gemini con interlocutores| T[Transcripción]
+      F[📄 Foto del acta] -->|LLM con visión| T
       X[⌨️ Texto] --> T
-      T -->|Llama 3.3 70B + JSON + Pydantic| E[Compromisos estructurados]
+      T -->|LLM + JSON + Pydantic| E[Compromisos y actores]
       E --> R{Revisión humana}
-      R --> REG[(Registro CSV / Excel)]
-      REG --> D[📊 Tablero: alertas, KPIs, gráficos]
-      E --> ACT[(Actores, relaciones e historial de posturas)]
-      ACT --> MA[🕸️ Grupos de interés (mapa de actores dinámico): red, puentes, cambios de postura]
-      E --> FI[📝 Ficha de la reunión]
+      R --> REG[(Registro)]
+      REG --> G[📊 Gestión de compromisos: vencidos por prioridad]
+      R --> ACT[(Actores y posturas fechadas)]
+      ACT -->|networkx| MA[🕸️ Grupos de interés]
+      C[(Conflictividad histórica)] --> RS
+      N[📰 Noticias RSS: región y Ley MAPE] -->|por validar| CTX[(Factores externos)]
+      CTX --> RS
+      MA --> RS[🎯 Riesgo social 0-100]
+      G --> RS
+      RS --> RU[🛣️ Escenarios y ruta para bajar el riesgo]
+      RS --> V[🏢 Vista corporativa y reportes .pptx]
   ```
+
 
 - **Modelos y por qué:**
 
@@ -155,12 +164,15 @@ Margen bruto superior al 95 %. El costo real del negocio es la venta y la implem
 |---|---|
 | Speech-to-text con Whisper (S13) | `compromisos/ia.py` → `transcribir_audio()` (Whisper en Groq o `faster-whisper` local) |
 | LLM con salidas estructuradas (S08) | `compromisos/ia.py` → `extraer_compromisos()` y `compromisos/modelos.py` (esquema Pydantic) |
-| Dashboards (S05) | `app.py` → pestañas *Gestión de compromisos* y *Mapa de actores* (KPIs, filtros, mapas y gráficos Plotly) |
+| Dashboards (S05) | `app.py` → pestañas *Gestión de compromisos*, *Grupos de interés*, *Conflictividad social* y *Vista corporativa* (KPIs, filtros, mapas y gráficos Plotly) |
 | Análisis de redes con Python | `compromisos/actores.py` → red de actores con `networkx` (grado, intermediación, actores puente) y evolución de posturas en el tiempo |
 | Análisis de riesgo y escenarios | `compromisos/riesgos.py` → riesgo de paralización por proceso, actores con capacidad de veto, simulador de escenarios y plan de acción; `compromisos/anticipar.py` → detonantes y contexto, mejores jugadas y tendencia del riesgo |
 | Vista de portafolio | `compromisos/portafolio.py` → varios proyectos en una sola herramienta, comparación corporativa y actores transversales |
 | Reportes automáticos | `compromisos/presentacion.py` → presentación .pptx con gráficos nativos (`python-pptx`, `matplotlib`) |
-| Despliegue y evaluación (S12) | Streamlit Community Cloud + `tests/` |
+| Despliegue y evaluación (S12) | Streamlit Community Cloud + `tests/` (25 pruebas con `pytest`) |
+| Scraping y APIs | `compromisos/noticias.py` y `compromisos/seguimiento.py` → noticias por RSS de Google Noticias, clasificadas por tema, alcance y alerta |
+
+**Por qué estas dos en el centro: Whisper y el LLM con salida estructurada.** El cuello de botella del relacionista es pasar una reunión tensa al acta y al Excel. Whisper convierte el audio en texto sin tipear, y la salida estructurada (validada con Pydantic) convierte ese texto en filas que el registro acepta sin corregir el formato. Sin esas dos herramientas, el resto de la app no tendría datos.
 
 ## 9. Qué hizo el agente
 
@@ -170,8 +182,10 @@ Usé **Claude Code** como asistente de programación. Generó:
 - El prompt de extracción, a partir de mis criterios de riesgo (agua, tierras, salud y empleo local = riesgo alto).
 - La transcripción de ejemplo, la extracción de ejemplo y el registro sintético (`scripts/generar_registro_demo.py`).
 - Las pruebas (`tests/`), la guía de entrevistas y este README a partir de mis notas.
+- Después de cada entrevista, los módulos que pidieron los usuarios: `anticipar.py` (detonantes, jugadas, tendencia), `gerencia.py` (vencidos por poder de la comunidad), `modulos.py` (venta por módulos), `ruta.py` (ruta para bajar el riesgo), `noticias.py` y `seguimiento.py` (contexto del día y Ley MAPE), `interlocutores.py` (quién dijo qué) y la nueva apariencia para gerencia.
+- El video de respaldo y el reel, armados con capturas de la app y mi narración grabada.
 
-Yo definí el problema y el flujo desde mi experiencia en campo, hice las entrevistas, revisé los compromisos extraídos y grabé la reunión de prueba.
+Yo definí el problema y el flujo desde mi experiencia en campo, hice las entrevistas y decidí qué cambiar después de cada una, definí los criterios de riesgo y de poder de las comunidades, revisé los compromisos extraídos, probé la app desplegada y grabé la narración.
 
 ## Datos y privacidad
 
