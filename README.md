@@ -4,7 +4,7 @@
 
 *Un producto de [Confluentia](https://www.confluentia.pe) · Inteligencia social para decisiones estratégicas en territorio.*
 
-**Demo:** https://compromisos-roddy.streamlit.app · **Video de respaldo:** _pendiente_
+**Demo:** https://compromisos-roddy.streamlit.app · **Video de respaldo (90 s):** https://youtu.be/gcdkB8OVyAA
 
 > Proyecto final de la Diplomatura Q-Lab PUCP · Data Science con Python ([issue #204](https://github.com/d2cml-ai/Data-Science-Python/issues/204)).
 
