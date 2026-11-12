@@ -230,7 +230,7 @@ def figura_alerta(res: pd.DataFrame, alto: int = 300) -> go.Figure:
     return fig
 
 
-def figura_mapa(res: pd.DataFrame, comunidades: pd.DataFrame, ind: pd.DataFrame, fondo: str = "⛰️ Relieve",
+def figura_mapa(res: pd.DataFrame, comunidades: pd.DataFrame, ind: pd.DataFrame, fondo: str = "🛰️ Satélite",
                 alto: int = 520) -> go.Figure:
     """Cada proyecto con su nombre y sus comunidades coloreadas por semaforo."""
     capas, atribucion, texto_oscuro = visual.FONDOS.get(fondo, visual.FONDOS["⛰️ Relieve"])
@@ -244,8 +244,8 @@ def figura_mapa(res: pd.DataFrame, comunidades: pd.DataFrame, ind: pd.DataFrame,
         if not s_.empty:
             fig.add_trace(go.Scattermap(
                 lat=s_["lat"], lon=s_["lon"], mode="markers", name=nivel_,
-                marker=dict(size=10 + s_["vencidos"].clip(upper=15) * 1.4, color=visual.SEMAFORO[nivel_],
-                            opacity=0.95),
+                marker=dict(size=11 + s_["vencidos"].clip(upper=15) * 1.4, color=visual.SEMAFORO[nivel_],
+                            opacity=1),
                 customdata=s_[["comunidad", "proyecto", "vencidos"]].values,
                 hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]}<br>Vencidos: %{customdata[2]:.0f}"
                               "<extra></extra>"))
@@ -258,7 +258,7 @@ def figura_mapa(res: pd.DataFrame, comunidades: pd.DataFrame, ind: pd.DataFrame,
         derecha = pos_ == "middle right"
         fig.add_trace(go.Scattermap(
             lat=[f_["lat"] - (0 if derecha else paso)], lon=[f_["lon"] + (paso if derecha else 0)], mode="markers+text", marker=dict(size=1, opacity=0), showlegend=False, hoverinfo="skip", text=[nom],
-            textposition=pos_, textfont=dict(size=14, color=visual.TINTA if texto_oscuro else "#ffffff")))
+            textposition=pos_, textfont=dict(size=15, weight=700, color=visual.TINTA if texto_oscuro else "#ffffff")))
     fig.update_layout(
         map=dict(style=os.getenv("ESTILO_MAPA") or ("carto-positron" if not capas else "white-bg"),
                  center=centro, zoom=zoom,

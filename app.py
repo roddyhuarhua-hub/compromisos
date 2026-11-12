@@ -223,8 +223,8 @@ header[data-testid="stHeader"] { background: transparent; }
 .card, .evento, div[data-testid="stPlotlyChart"] { border: 1px solid #dfe5e1; border-radius: 12px;
     box-shadow: 0 1px 3px rgba(16,24,40,0.05); }
 div[data-testid="stPlotlyChart"]:has(.maplibregl-map) { padding: 0; overflow: hidden; }
-/* imagen satelital mas luminosa y de color natural (la de los Andes sale oscura y parda a poco zoom) */
-div[data-testid="stPlotlyChart"] .maplibregl-canvas { filter: brightness(1.12) saturate(1.18) contrast(1.06); }
+/* mapas con un poco mas de color (sin aclarar: el relieve ya es claro) */
+div[data-testid="stPlotlyChart"] .maplibregl-canvas { filter: saturate(1.25) contrast(1.04); }
 .alerta { border-radius: 8px; }
 /* barra lateral oscura */
 section[data-testid="stSidebar"] { background: #10231a; border-right: 1px solid #22392c; }
@@ -862,9 +862,11 @@ if "portafolio" in MODS:
                        "de su proceso más expuesto + 30% los días de paralización de los últimos 3 años.")
 
             st.markdown("#### 🗺️ Huella territorial de los proyectos")
+            fondo_p = st.segmented_control("Fondo del mapa de proyectos", list(visual.FONDOS), default="🛰️ Satélite",
+                                           label_visibility="collapsed", key="fondo_portafolio") or "🛰️ Satélite"
             reg_all = registro.con_estado(DATOS["registro"], hoy)
             ind_all = visual.indice_comunidades(reg_all, DATOS["comunidades"]) if not reg_all.empty else pd.DataFrame()
-            st.plotly_chart(portafolio.figura_mapa(res, DATOS["comunidades"], ind_all), width="stretch",
+            st.plotly_chart(portafolio.figura_mapa(res, DATOS["comunidades"], ind_all, fondo_p), width="stretch",
                             config=cfg("mapa_portafolio", zoom=True))
             st.plotly_chart(portafolio.figura_alerta(res), width="stretch", config=cfg("alerta_por_proyecto"))
             st.plotly_chart(portafolio.figura_comparacion(res), width="stretch", config=cfg("compromisos_por_proyecto"))
