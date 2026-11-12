@@ -199,4 +199,4 @@ Base de datos compartida (después de la entrega), **niveles de acceso** (el per
 
 ## Licencia
 
-[MIT](LICENSE)
+Software propietario de Confluentia. Todos los derechos reservados (ver [LICENSE](LICENSE)).
