@@ -88,12 +88,17 @@ FONDOS = {
 
 
 def mapa(ind: pd.DataFrame, reuniones: pd.DataFrame, alto: int = 470,
-         fondo: str = "🛰️ Satélite") -> go.Figure:
-    """Mapa de calor de reuniones + burbujas por comunidad coloreadas por semaforo,
-    sobre imagen satelital, relieve o calles."""
+         fondo: str = "🛰️ Satélite", territorios: dict | None = None, capa: dict | None = None) -> go.Figure:
+    """Territorios comunales (poligonos por semaforo) + mapa de calor de reuniones + burbujas por comunidad,
+    sobre imagen satelital, relieve o calles. capa: capa WMS oficial (territorios.capa_oficial)."""
+    from . import territorios as tr
+
     capas, atribucion, texto_oscuro = FONDOS.get(fondo, FONDOS["🛰️ Satélite"])
     satelite = not texto_oscuro
     fig = go.Figure()
+    for t in tr.trazas(territorios, ind, SEMAFORO, satelite):
+        fig.add_trace(t)
+    con_poligonos = bool(territorios and territorios.get("features"))
     r = reuniones.dropna(subset=["lat", "lon"])
     if not r.empty:
         fig.add_trace(go.Densitymap(
@@ -110,7 +115,8 @@ def mapa(ind: pd.DataFrame, reuniones: pd.DataFrame, alto: int = 470,
             continue
         fig.add_trace(go.Scattermap(
             lat=s["lat"], lon=s["lon"], mode="markers+text",
-            marker=dict(size=14 + s["vencidos"].clip(upper=15) * 2.2, color=SEMAFORO[nivel], opacity=0.95),
+            marker=dict(size=(10 + s["vencidos"].clip(upper=15) * 1.2) if con_poligonos
+                        else (14 + s["vencidos"].clip(upper=15) * 2.2), color=SEMAFORO[nivel], opacity=0.95),
             text=s["comunidad"].str.replace("C.C. ", "", regex=False), textposition="top center",
             textfont=dict(size=13, color=TINTA if texto_oscuro else "#ffffff",
                           weight=700 if satelite else 500),
@@ -126,7 +132,9 @@ def mapa(ind: pd.DataFrame, reuniones: pd.DataFrame, alto: int = 470,
             style=os.getenv("ESTILO_MAPA") or ("carto-positron" if not capas else "white-bg"),
             center=centro, zoom=zoom,
             layers=[dict(sourcetype="raster", source=[url], below="traces",
-                         sourceattribution=atribucion) for url in capas],
+                         sourceattribution=atribucion) for url in capas]
+                   + ([dict(sourcetype="raster", source=[capa["url"]], below="traces", opacity=0.85,
+                            sourceattribution=capa["fuente"])] if capa else []),
         ),
         height=alto, margin=dict(l=0, r=0, t=0, b=0),
         legend=dict(orientation="h", yanchor="bottom", y=0.01, x=0.01, bgcolor="rgba(255,255,255,0.85)",

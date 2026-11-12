@@ -87,11 +87,17 @@ def _tam(d: pd.DataFrame) -> pd.Series:
 
 
 # ------------------------------------------------------------------ graficos
-def mapa(df: pd.DataFrame, comunidades: pd.DataFrame, fondo: str = "🛰️ Satélite", alto: int = 520) -> go.Figure:
-    """Lugares donde ocurrieron los hechos: calor ponderado por dias de paralizacion + un punto por evento."""
+def mapa(df: pd.DataFrame, comunidades: pd.DataFrame, fondo: str = "🛰️ Satélite", alto: int = 520,
+         territorios: dict | None = None, capa: dict | None = None) -> go.Figure:
+    """Lugares donde ocurrieron los hechos: territorios comunales + calor ponderado por dias de paralizacion
+    + un punto por evento."""
+    from . import territorios as tr
+
     capas, atribucion, texto_oscuro = FONDOS.get(fondo, FONDOS["🛰️ Satélite"])
     d = df.dropna(subset=["lat", "lon"])
     fig = go.Figure()
+    for t in tr.contornos(territorios, comunidades["comunidad"], satelite=not texto_oscuro):
+        fig.add_trace(t)
     if not d.empty:
         fig.add_trace(go.Densitymap(
             lat=d["lat"], lon=d["lon"], z=1 + d["duracion_dias"], radius=38, opacity=0.65, showscale=False,
@@ -124,7 +130,9 @@ def mapa(df: pd.DataFrame, comunidades: pd.DataFrame, fondo: str = "🛰️ Sat�
         map=dict(style=os.getenv("ESTILO_MAPA") or ("carto-positron" if not capas else "white-bg"),
                  center=centro, zoom=zoom,
                  layers=[dict(sourcetype="raster", source=[u], below="traces", sourceattribution=atribucion)
-                         for u in capas]),
+                         for u in capas]
+                 + ([dict(sourcetype="raster", source=[capa["url"]], below="traces", opacity=0.85,
+                          sourceattribution=capa["fuente"])] if capa else [])),
         height=alto, margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)",
         legend=dict(orientation="h", yanchor="bottom", y=0.01, x=0.01, bgcolor="rgba(255,255,255,0.88)",
                     font=dict(size=11)))

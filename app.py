@@ -23,7 +23,7 @@ try:  # .env en local; en Streamlit Cloud se usan los Secrets
 except ImportError:
     pass
 
-from compromisos import (actores, anticipar, conflictos, gerencia, ia, interlocutores, modulos, noticias, ruta, seguimiento, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
+from compromisos import (actores, anticipar, conflictos, gerencia, ia, interlocutores, modulos, noticias, ruta, seguimiento, territorios, laminas_actores, laminas_conflictos, laminas_riesgos, panel_imagen,
                          portafolio, presentacion, registro, riesgos, visual)
 from compromisos.modelos import ExtraccionReunion
 
@@ -34,7 +34,7 @@ COLOR_ESTADO, ICONO_ESTADO = visual.COLOR_ESTADO, visual.ICONO_ESTADO
 
 st.set_page_config(page_title="Compromisos · Confluentia", page_icon=str(RAIZ / "img" / "icono_confluentia.png"),
                    layout="wide")
-st.logo(str(RAIZ / "img" / "logo_confluentia_horizontal.png"), icon_image=str(RAIZ / "img" / "icono_confluentia.png"),
+st.logo(str(RAIZ / "img" / "logo_confluentia_horizontal_blanco.png"), icon_image=str(RAIZ / "img" / "icono_confluentia.png"),
         size="large", link="https://www.confluentia.pe")
 LOGO_BLANCO = base64.b64encode((RAIZ / "img" / "logo_confluentia_blanco.png").read_bytes()).decode()
 
@@ -178,6 +178,67 @@ section[data-testid="stSidebar"] { background: #fbfcfb; }
   .stTabs [role="tab"], .stTabs [data-baseweb="tab"] { padding: 6px 10px; white-space: nowrap; flex: 0 0 auto; }
   .hero .por { display: none; }
   .kpi .val { font-size: 24px; } }
+/* ---- mascara corporativa (v3): barra superior sobria, navegacion subrayada, barra lateral oscura ---- */
+.stApp { background: #f3f5f4; }
+header[data-testid="stHeader"] { background: transparent; }
+.block-container { padding-top: 1.1rem; max-width: 1480px; }
+.topbar { display: flex; align-items: center; gap: 22px; background: #10231a; color: #fff; border-radius: 14px;
+          padding: 14px 22px; margin-bottom: 14px; box-shadow: 0 6px 20px rgba(16,35,26,0.18);
+          background-image: linear-gradient(100deg, #10231a 0%, #173226 60%, #1f4130 100%); }
+.topbar .marca { height: 46px; width: auto; }
+.topbar .sep { width: 1px; align-self: stretch; background: rgba(255,255,255,0.16); }
+.topbar .tit { display: flex; flex-direction: column; min-width: 0; }
+.topbar .tit b { font-size: 21px; font-weight: 700; letter-spacing: -.01em; color: #fff; line-height: 1.15; }
+.topbar .tit span { font-size: 12.5px; color: rgba(228,236,231,0.78); }
+.topbar .met { margin-left: auto; display: flex; gap: 0; }
+.topbar .met div { padding: 0 16px; border-left: 1px solid rgba(255,255,255,0.14); text-align: right; }
+.topbar .met div:first-child { border-left: none; }
+.topbar .met b { display: block; font-size: 20px; font-weight: 700; color: #fff; line-height: 1.1; }
+.topbar .met span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: rgba(228,236,231,0.7); }
+.topbar .ambito { font-size: 11.5px; color: #bfe3c9; background: rgba(143,207,159,0.12);
+                  border: 1px solid rgba(143,207,159,0.35); padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+@media (max-width: 1100px) { .topbar .met div:nth-child(n+3) { display: none; } }
+@media (max-width: 760px) { .topbar { flex-wrap: wrap; gap: 10px; padding: 12px 14px; }
+  .topbar .marca { height: 34px; } .topbar .sep, .topbar .met { display: none; } .topbar .tit b { font-size: 18px; } }
+/* navegacion: barra blanca con subrayado, como un sistema de gestion */
+.stTabs [data-baseweb="tab-list"], .stTabs [role="tablist"] { background: #fff; padding: 0 10px; border-radius: 12px;
+    gap: 2px; box-shadow: 0 1px 3px rgba(16,24,40,0.06); border: 1px solid #dfe5e1; flex-wrap: wrap; }
+.stTabs [data-baseweb="tab"], .stTabs [role="tab"] { border-radius: 0; color: #4b5852; padding: 13px 14px 11px;
+    border-bottom: 3px solid transparent; background: transparent; }
+.stTabs [role="tab"]:hover { background: transparent; color: #10231a; border-bottom-color: #c9d6ce; }
+.stTabs [data-baseweb="tab"][aria-selected="true"], .stTabs [role="tab"][aria-selected="true"] {
+    background: transparent; color: #10231a; border-bottom: 3px solid #2d7a4a; }
+.stTabs [role="tab"][aria-selected="true"] p { color: #10231a; font-weight: 700; }
+.stTabs [role="tab"] p { font-size: 14px; font-weight: 600; }
+/* indicadores: tarjeta blanca con acento lateral */
+.kpi { background: #fff; border: 1px solid #dfe5e1; border-top: 1px solid #dfe5e1; border-left: 4px solid var(--c);
+       border-radius: 10px; box-shadow: 0 1px 3px rgba(16,24,40,0.05); padding: 14px 16px 12px; }
+.kpi:hover { transform: none; box-shadow: 0 6px 16px rgba(16,24,40,0.08); }
+.kpi .lab { color: #66736c; font-size: 11px; letter-spacing: .06em; }
+.kpi .val { color: #10231a; font-size: 30px; }
+.kpi .sub { color: #66736c; }
+/* titulos de seccion */
+.stMarkdown h4 { border-left: none; padding: 0 0 6px 0; font-size: 16px; color: #10231a;
+                 border-bottom: 1px solid #dfe5e1; margin: 14px 0 10px 0; }
+.card, .evento, div[data-testid="stPlotlyChart"] { border: 1px solid #dfe5e1; border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(16,24,40,0.05); }
+div[data-testid="stPlotlyChart"]:has(.maplibregl-map) { padding: 0; overflow: hidden; }
+.alerta { border-radius: 8px; }
+/* barra lateral oscura */
+section[data-testid="stSidebar"] { background: #10231a; border-right: 1px solid #22392c; }
+section[data-testid="stSidebar"] hr { border-color: #2b4636; }
+section[data-testid="stSidebar"] .stMarkdown h3 { color: #fff; }
+section[data-testid="stSidebar"] [data-testid="stAlert"] { background: rgba(250,178,25,0.12); }
+section[data-testid="stSidebar"] [data-testid="stAlert"] p { color: #f5dfa8; }
+section[data-testid="stSidebar"] div[data-testid="stExpander"] details { background: rgba(255,255,255,0.04);
+    border: 1px solid #2b4636; }
+section[data-testid="stSidebar"] div[data-testid="stExpander"] summary p,
+section[data-testid="stSidebar"] div[data-testid="stExpander"] li { color: #e4ece7; }
+@media (max-width: 640px) {
+  .block-container { padding-top: 3.4rem; }
+  .stTabs [data-baseweb="tab-list"], .stTabs [role="tablist"] { flex-wrap: nowrap; overflow-x: auto; padding: 0 4px; }
+  .stTabs [role="tab"], .stTabs [data-baseweb="tab"] { white-space: nowrap; flex: 0 0 auto; padding: 11px 10px 9px; }
+  .stTabs [role="tab"] p { font-size: 13px; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -375,10 +436,42 @@ with st.sidebar:
         st.session_state.registro = demo()["registro"].copy()
         st.rerun()
     st.caption("Datos de ejemplo sintéticos: comunidades, empresa y ubicaciones ficticias.")
+    st.divider()
+    st.markdown("**🗺️ Territorios comunales**")
+    terr_sub = st.file_uploader("Límites de las comunidades (GeoJSON o shapefile .zip, en WGS84)",
+                                type=["geojson", "json", "zip"], key="terr_archivo",
+                                help="Del catastro rural del MIDAGRI, del plano inscrito en SUNARP, del SICCAM o de "
+                                     "tu levantamiento. Se cruzan por el nombre de la comunidad.")
+    if terr_sub is not None:
+        try:
+            st.session_state.terr_cliente = territorios.leer(terr_sub.name, terr_sub.getvalue())
+        except Exception as e:  # noqa: BLE001
+            st.error(f"No se pudo leer el archivo: {e}")
+    st.toggle("Capa oficial del MIDAGRI (comunidades campesinas)", key="capa_midagri", value=True,
+              help="El mapa pide la capa directamente al geoservidor del catastro rural. Si no responde, no se ve.")
 
 DATOS = {k_: st.session_state[k_] for k_ in CLAVES_DATOS}
 V = portafolio.filtrar(DATOS, PROY)  # vista del proyecto elegido (o de todos)
 COMUNIDADES = V["comunidades"]
+
+
+@st.cache_data(show_spinner=False, max_entries=10)
+def territorios_ejemplo(coms: pd.DataFrame) -> dict:
+    return territorios.ejemplo(coms)
+
+
+@st.cache_data(show_spinner=False, ttl=24 * 3600)
+def capa_midagri_cache() -> dict | None:
+    return territorios.capa_oficial()
+
+
+if st.session_state.get("terr_cliente"):
+    TERR, TERR_FALTAN = territorios.cruzar(st.session_state.terr_cliente, DATOS["comunidades"])
+    TERR_FUENTE = "límites cargados por el cliente"
+else:
+    TERR, TERR_FALTAN = territorios_ejemplo(DATOS["comunidades"]), []
+    TERR_FUENTE = "territorios de ejemplo (no son límites reales)"
+CAPA_OFICIAL = capa_midagri_cache() if st.session_state.get("capa_midagri", True) else None
 base_df = registro.con_estado(V["registro"], hoy)
 k_total = registro.indicadores(base_df)
 
@@ -393,10 +486,10 @@ FONDO_LAMINA = {"🛰️ Satélite": "satelite", "⛰️ Relieve": "relieve"}
 
 
 @st.cache_data(show_spinner=False, max_entries=20)
-def laminas_cache(df, corte, cliente, filtros, fondo="satelite", coms=None) -> tuple[bytes, bytes]:
+def laminas_cache(df, corte, cliente, filtros, fondo="satelite", coms=None, terr=None) -> tuple[bytes, bytes]:
     """Laminas 4K del panel (una por grafico): devuelve (pptx, zip de PNG)."""
     ind_f = visual.indice_comunidades(df, coms)
-    lams = panel_imagen.laminas(df, ind_f, registro.indicadores(df), corte, cliente, filtros, fondo)
+    lams = panel_imagen.laminas(df, ind_f, registro.indicadores(df), corte, cliente, filtros, fondo, terr)
     return panel_imagen.pptx_laminas(lams), panel_imagen.zip_laminas(lams)
 
 
@@ -693,19 +786,16 @@ if CAMPO:  # celular del personal de campo: solo el formulario, sin pestañas
     st.stop()
 
 st.markdown(f"""
-<div class="hero">
+<div class="topbar">
   <img class="marca" src="data:image/png;base64,{LOGO_BLANCO}" alt="Confluentia">
-  <div class="por">Confluentia · Inteligencia social para decisiones estratégicas en territorio</div>
-  <h1>🤝 Compromisos</h1>
-  <p>Gestión de compromisos, grupos de interés y riesgo social, con IA.</p>
-  <div class="chips">
-    <span class="chip">📍 {base_df['comunidad'].nunique()} comunidades</span>
-    <span class="chip extra">🗓️ {base_df['reunion'].nunique()} reuniones</span>
-    <span class="chip">📌 {k_total['total']} compromisos</span>
-    <span class="chip">🗂️ {PROY.replace('🌐 ', '') if PROY == portafolio.TODOS else PROY}</span>
-    <span class="chip extra">🕸️ {len(V['actores'])} actores mapeados</span>
-    <span class="chip extra">🎙️ Whisper + Gemini</span>
-    <span class="chip extra">Corte: {hoy:%d/%m/%Y}</span>
+  <div class="sep"></div>
+  <div class="tit"><b>Compromisos</b><span>Gestión de compromisos, grupos de interés y riesgo social, con IA</span></div>
+  <span class="ambito">🗂️ {PROY.replace('🌐 ', '') if PROY == portafolio.TODOS else PROY} · corte {hoy:%d/%m/%Y}</span>
+  <div class="met">
+    <div><b>{base_df['comunidad'].nunique()}</b><span>Comunidades</span></div>
+    <div><b>{k_total['total']}</b><span>Compromisos</span></div>
+    <div><b>{base_df['reunion'].nunique()}</b><span>Reuniones</span></div>
+    <div><b>{len(V['actores'])}</b><span>Actores</span></div>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -829,7 +919,7 @@ if "compromisos" in MODS:
             if st.button("Preparar láminas", type="primary", disabled=df.empty):
                 with st.spinner("Dibujando las láminas en alta resolución (descargando el mapa satelital)…"):
                     st.session_state.laminas = (clave_lam, laminas_cache(df, hoy, cliente_lam, filtros_txt, fondo_l,
-                                                                                   COMUNIDADES))
+                                                                                   COMUNIDADES, TERR))
             lam = st.session_state.get("laminas")
             if lam and lam[0] == clave_lam:  # solo si corresponden a los filtros actuales
                 p1, p2 = st.columns(2)
@@ -862,10 +952,15 @@ if "compromisos" in MODS:
                 st.markdown("#### 🗺️ Mapa de relacionamiento y semáforo social")
                 fondo = st.segmented_control("Fondo del mapa", list(visual.FONDOS), default="🛰️ Satélite",
                                              label_visibility="collapsed") or "🛰️ Satélite"
-                st.plotly_chart(visual.mapa(ind, reuniones, fondo=fondo), width="stretch",
+                st.plotly_chart(visual.mapa(ind, reuniones, fondo=fondo, territorios=TERR, capa=CAPA_OFICIAL),
+                                width="stretch",
                                 config=cfg("mapa_comunidades", zoom=True))
-                nota("Halo: intensidad de reuniones. Círculos: comunidades, coloreadas por índice de riesgo; "
-                           "el tamaño crece con los compromisos vencidos. Usa la rueda del mouse para acercar.")
+                st.caption(f"Polígonos: {TERR_FUENTE}"
+                           + (" · capa oficial: catastro rural MIDAGRI" if CAPA_OFICIAL else "")
+                           + (f" · sin polígono: {len(TERR_FALTAN)} comunidades" if TERR_FALTAN else ""))
+                nota("Polígonos: territorio de cada comunidad, coloreado por su índice de riesgo. Halo: intensidad "
+                     "de reuniones. Círculos: el tamaño crece con los compromisos vencidos. Usa la rueda del mouse "
+                     "para acercar.")
             with c2:
                 st.markdown("#### 🚦 Semáforo social")
                 filas = []
@@ -1219,7 +1314,8 @@ if "conflictividad" in MODS:
                     st.markdown("#### 📍 Dónde ocurrieron")
                     fondo_c = st.segmented_control("Fondo", list(visual.FONDOS), default="🛰️ Satélite",
                                                    label_visibility="collapsed", key="conf_fondo") or "🛰️ Satélite"
-                    st.plotly_chart(conflictos.mapa(Cf, COMS_C, fondo_c), width="stretch",
+                    st.plotly_chart(conflictos.mapa(Cf, COMS_C, fondo_c, territorios=TERR, capa=CAPA_OFICIAL),
+                                    width="stretch",
                                     config=cfg("mapa_conflictos", zoom=True))
                     nota("Calor: lugares con más días de paralización. Cada punto es un evento, coloreado por tipo; "
                                "el tamaño crece con la duración. Pasa el mouse para ver quién convocó y qué exigían.")

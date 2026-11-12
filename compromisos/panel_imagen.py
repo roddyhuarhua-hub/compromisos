@@ -53,11 +53,15 @@ def _kpi(fig, x, y, w, h, etiqueta, valor, sub, color):
     fig.text(x + 0.012, y + 0.012, sub, fontsize=11.5, color=TINTA_2)
 
 
-def _mapa(ax, ind: pd.DataFrame, fondo: str = "satelite"):
+def _mapa(ax, ind: pd.DataFrame, fondo: str = "satelite", territorios_gj: dict | None = None):
+    from . import territorios
+
     d = ind.dropna(subset=["lat", "lon"])
     if d.empty:
         ax.axis("off")
         return
+    gj = territorios_gj if territorios_gj is not None else territorios.ejemplo(d)
+    territorios.dibujar_mpl(ax, gj, dict(zip(d["comunidad"], d["semaforo"].map(SEMAFORO))), fondo == "satelite")
     for _, r in d.iterrows():
         for k, a in ((6, 0.05), (4, 0.08), (2.5, 0.12)):  # halo de "calor" por numero de reuniones
             ax.scatter(r["lon"], r["lat"], s=(300 + 160 * r["reuniones"]) * k, color=SEMAFORO[r["semaforo"]],
@@ -218,7 +222,7 @@ def _corto(c: str) -> str:
 
 
 def laminas(df: pd.DataFrame, ind: pd.DataFrame, k: dict, hoy: date, cliente: str = "",
-            filtros: str = "", fondo: str = "satelite") -> list[tuple[str, bytes]]:
+            filtros: str = "", fondo: str = "satelite", territorios_gj: dict | None = None) -> list[tuple[str, bytes]]:
     """Devuelve [(nombre_archivo, png 3840x2160), ...], una lamina por seccion del panel.
     fondo: 'satelite' o 'relieve' (mapa base de la lamina territorial)."""
     out = []
@@ -270,7 +274,7 @@ def laminas(df: pd.DataFrame, ind: pd.DataFrame, k: dict, hoy: date, cliente: st
                   f"{_corto(peor['comunidad'])} concentra el mayor riesgo (índice {peor['indice']:.0f}/100, "
                   f"{peor['vencidos']} compromisos vencidos).", cliente, hoy, filtros)
     ax = fig.add_axes([grande["x"], grande["y"], grande["w"], grande["h"]])
-    _mapa(ax, ind, fondo)
+    _mapa(ax, ind, fondo, territorios_gj)
     _claves(fig, **lado, titulo="Lo que hay que saber", puntos=[
         (f"{len(criticas)}", "comunidades en estado crítico: " + ", ".join(_corto(c) for c in criticas["comunidad"]),
          SEMAFORO["Crítico"]),

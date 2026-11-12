@@ -225,7 +225,7 @@ def test_mapa_base_une_mosaicos(monkeypatch):
 
     monkeypatch.setattr(mapa_base, "_descargar", falso)
     img, extent, atribucion = mapa_base.mosaico(-73.3, -72.4, -14.4, -13.9)
-    assert img.shape[0] == 600 and extent == (-73.3, -72.4, -14.4, -13.9) and "Esri" in atribucion
+    assert img.shape[0] >= 900 and extent == (-73.3, -72.4, -14.4, -13.9) and "Esri" in atribucion
     assert tuple(img[300, 300]) == (30, 90, 40)
     monkeypatch.setattr(mapa_base, "_descargar", lambda url: None)  # sin internet: no rompe
     assert mapa_base.mosaico(-73.3, -72.4, -14.4, -13.9) is None
@@ -461,3 +461,26 @@ def test_interlocutores():
     demo = (EJEMPLO / "transcripcion_reunion_demo.txt").read_text(encoding="utf-8")
     assert len(it.hablantes(it.turnos(demo))) >= 4
     assert it.turnos("Texto corrido sin hablantes.") == []
+
+
+def test_territorios_comunales():
+    import pandas as pd
+    from compromisos import territorios as t
+
+    c = pd.read_csv(Path(__file__).resolve().parents[1] / "datos" / "ejemplo" / "comunidades.csv")
+    gj = t.ejemplo(c)
+    assert len(gj["features"]) == len(c)
+    assert all(f["geometry"]["type"] == "Polygon" for f in gj["features"])
+    # el cruce por nombre ignora tildes, mayusculas y "comunidad campesina de"
+    cliente = {"type": "FeatureCollection", "features": [
+        {"type": "Feature", "properties": {"NOM_COMUNI": "COMUNIDAD CAMPESINA DE PUCARA ALTO"},
+         "geometry": gj["features"][0]["geometry"]}]}
+    cruz, faltan = t.cruzar(cliente, c)
+    assert cruz["features"][0]["properties"]["comunidad"] == "C.C. Pucará Alto"
+    assert len(faltan) == len(c) - 1
+    # la capa oficial se arma desde el GetCapabilities del WMS
+    xml = (b"<WMT_MS_Capabilities><Capability><Layer><Title>r</Title><Layer><Name>3</Name>"
+           b"<Title>Comunidades Campesinas</Title></Layer></Layer></Capability></WMT_MS_Capabilities>")
+    capa = t.capa_oficial(bajar=lambda u: xml, urls=["https://x/WMSServer"])
+    assert "layers=3" in capa["url"] and "{bbox-epsg-3857}" in capa["url"]
+    assert t.capa_oficial(bajar=lambda u: None, urls=["https://x/WMSServer"]) is None
