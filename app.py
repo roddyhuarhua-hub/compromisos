@@ -223,6 +223,8 @@ header[data-testid="stHeader"] { background: transparent; }
 .card, .evento, div[data-testid="stPlotlyChart"] { border: 1px solid #dfe5e1; border-radius: 12px;
     box-shadow: 0 1px 3px rgba(16,24,40,0.05); }
 div[data-testid="stPlotlyChart"]:has(.maplibregl-map) { padding: 0; overflow: hidden; }
+/* imagen satelital mas luminosa y de color natural (la de los Andes sale oscura y parda a poco zoom) */
+div[data-testid="stPlotlyChart"] .maplibregl-canvas { filter: brightness(1.12) saturate(1.18) contrast(1.06); }
 .alerta { border-radius: 8px; }
 /* barra lateral oscura */
 section[data-testid="stSidebar"] { background: #10231a; border-right: 1px solid #22392c; }

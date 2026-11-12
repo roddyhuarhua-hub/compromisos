@@ -226,7 +226,8 @@ def test_mapa_base_une_mosaicos(monkeypatch):
     monkeypatch.setattr(mapa_base, "_descargar", falso)
     img, extent, atribucion = mapa_base.mosaico(-73.3, -72.4, -14.4, -13.9)
     assert img.shape[0] >= 900 and extent == (-73.3, -72.4, -14.4, -13.9) and "Esri" in atribucion
-    assert tuple(img[300, 300]) == (30, 90, 40)
+    r_, g_, b_ = (int(v) for v in img[300, 300])
+    assert g_ > r_ and g_ > b_  # el tile verde simulado, con el realce de color
     monkeypatch.setattr(mapa_base, "_descargar", lambda url: None)  # sin internet: no rompe
     assert mapa_base.mosaico(-73.3, -72.4, -14.4, -13.9) is None
 

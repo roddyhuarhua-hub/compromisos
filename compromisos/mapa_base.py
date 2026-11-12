@@ -16,9 +16,12 @@ import numpy as np
 from PIL import Image
 
 ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services"
+CLARITY = "https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 ESTILOS = {
     # capas de abajo hacia arriba, atribucion
     "satelite": ([f"{ESRI}/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}",
+                    CLARITY,  # imagen mas nitida y de color natural (si no carga, queda la de abajo)
+                    f"{ESRI}/Reference/World_Transportation/MapServer/tile/{{z}}/{{y}}/{{x}}",
                   f"{ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{{z}}/{{y}}/{{x}}"],
                  "Imágenes © Esri, Maxar, Earthstar Geographics"),
     "relieve": ([f"{ESRI}/World_Topo_Map/MapServer/tile/{{z}}/{{y}}/{{x}}"],
@@ -60,7 +63,7 @@ def _descargar(url: str) -> bytes | None:
 
 
 def mosaico(lon0: float, lon1: float, lat0: float, lat1: float, estilo: str = "satelite",
-            max_tiles: int = 110) -> tuple[np.ndarray, tuple[float, float, float, float], str] | None:
+            max_tiles: int = 80) -> tuple[np.ndarray, tuple[float, float, float, float], str] | None:
     """Imagen del area (lon0..lon1, lat0..lat1) reproyectada a grilla lon/lat regular.
     Devuelve (imagen RGB, extent=(lon0, lon1, lat0, lat1), atribucion) o None si no se pudo descargar."""
     capas, atribucion = _capas(estilo)
@@ -87,7 +90,12 @@ def mosaico(lon0: float, lon1: float, lat0: float, lat1: float, estilo: str = "s
         except Exception:  # noqa: BLE001
             continue
         lienzo.alpha_composite(t, (256 * i, 256 * j))
-    img = np.asarray(lienzo.convert("RGB"))
+    from PIL import ImageEnhance
+    rgb = lienzo.convert("RGB")
+    if estilo == "satelite":  # mas luz y color natural: la imagen de los Andes sale oscura a poco zoom
+        rgb = ImageEnhance.Contrast(ImageEnhance.Color(ImageEnhance.Brightness(rgb).enhance(1.12)).enhance(1.18))\
+            .enhance(1.06)
+    img = np.asarray(rgb)
     # recorte exacto y paso de Mercator a grilla regular de latitud (para dibujar en grados)
     # a la resolucion nativa de los tiles (antes 600 px fijos: el mapa salia borroso en las laminas 4K)
     alto_nat = (_a_tile(lat0, lon0, z)[1] - _a_tile(lat1, lon0, z)[1]) * 256

@@ -76,9 +76,12 @@ from .zoom import encuadre  # noqa: E402,F401  (se mantiene por compatibilidad)
 
 
 ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services"
+CLARITY = "https://clarity.maptiles.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
 FONDOS = {
     # nombre: (capas raster de abajo hacia arriba, atribucion, texto oscuro?)
     "🛰️ Satélite": ([f"{ESRI}/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}",
+                    CLARITY,  # imagen mas nitida y de color natural (si no carga, queda la de abajo)
+                    f"{ESRI}/Reference/World_Transportation/MapServer/tile/{{z}}/{{y}}/{{x}}",
                     f"{ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{{z}}/{{y}}/{{x}}"],
                    "Imágenes © Esri, Maxar, Earthstar Geographics", False),
     "⛰️ Relieve": ([f"{ESRI}/World_Topo_Map/MapServer/tile/{{z}}/{{y}}/{{x}}"],
